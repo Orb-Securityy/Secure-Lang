@@ -3,7 +3,7 @@
 Secure's implementation is proprietary and **must not be published**. Independent audit is still possible
 because everything an auditor needs about a *program* is derivable without the compiler's source:
 
-1. **`securec emit-c prog.sec`** — the full generated C (deterministic for the same source contents and source basename). Generated enum and method symbols are collision-resistant by construction; panic-location strings C-escape the source basename. Auditors review
+1. **`securec emit-c prog.sec`** — the full generated C (deterministic for the same source contents and source basename). Generated enum and method symbols and composite `Result<T, E>` C type names are unambiguous; panic-location strings C-escape the source basename. Auditors review
    and rebuild exactly what ships. Pair it with `securec/secure_rt.h` (the whole runtime, ~200 lines, shippable
    under NDA or publishable independently because it contains no compiler internals).
 2. **`securec audit prog.sec`** — JSON with the source SHA-256, every `unsafe` block, `unsafe fn` and `extern`
