@@ -106,22 +106,26 @@ def main(argv=None):
     if a.cmd == "audit":
         print(json.dumps(audit_report(a.file, src, comp), indent=2))
         return 0
-    out = a.output or os.path.splitext(a.file)[0]
     if a.cmd == "run":
         try:
-            out = os.path.join(tempfile.mkdtemp(prefix="secure-run-"), "secure_prog")
+            with tempfile.TemporaryDirectory(prefix="secure-run-") as run_dir:
+                out = os.path.join(run_dir, "secure_prog")
+                if not cc_build(csrc, out, "-O" + a.opt, a.strict_cc, a.sanitize):
+                    return 2
+                try:
+                    r = subprocess.run([out] + a.args)
+                except OSError as exc:
+                    print(f"error: cannot execute compiled program: {exc.strerror or exc}", file=sys.stderr)
+                    return 2
+                return r.returncode
         except OSError as exc:
-            print(f"error: cannot create temporary run directory: {exc.strerror or exc}", file=sys.stderr)
+            print(f"error: cannot create or clean temporary run directory: {exc.strerror or exc}",
+                  file=sys.stderr)
             return 2
+
+    out = a.output or os.path.splitext(a.file)[0]
     if not cc_build(csrc, out, "-O" + a.opt, a.strict_cc, a.sanitize):
         return 2
-    if a.cmd == "run":
-        try:
-            r = subprocess.run([out] + a.args)
-        except OSError as exc:
-            print(f"error: cannot execute compiled program: {exc.strerror or exc}", file=sys.stderr)
-            return 2
-        return r.returncode
     return 0
 
 
