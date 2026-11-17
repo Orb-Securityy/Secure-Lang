@@ -1,0 +1,8 @@
+// EXPECT-ERR: moved value
+fn work() -> i32 { 7 }
+fn main() -> i32 {
+    let task = spawn(work);
+    let first = task.join();
+    let second = task.join();
+    return first + second;
+}
