@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.13 — parser nesting diagnostics
+
+- Convert parser/compiler `RecursionError` from deeply nested source expressions into a concise source diagnostic instead of leaking a Python traceback.
+- Add a driver regression using 1,200 nested parentheses; verify exit status 1 and traceback-free stderr.
+
 ## 0.1.12 — source file input diagnostics
 
 - Convert invalid UTF-8 source files into a clear CLI diagnostic instead of leaking `UnicodeDecodeError` tracebacks.

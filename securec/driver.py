@@ -47,6 +47,12 @@ def compile_source(path, forbid_unsafe=False):
     except SecError as e:
         report(e, path, src)
         return None, None, src
+    except RecursionError:
+        print(
+            f"error: source nesting exceeds the compiler's supported depth in {os.path.basename(path)}",
+            file=sys.stderr,
+        )
+        return None, None, src
     return csrc, comp, src
 
 
