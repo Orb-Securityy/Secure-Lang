@@ -4,6 +4,7 @@
 
 - Generate globally unique C enumerator names, avoiding collisions with other enums and C typedefs.
 - Encode method owner/name components unambiguously in generated C symbols.
+- Length-prefix both generic arguments in generated `Result<T, E>` type names to prevent underscore-based type collisions.
 - Escape source basenames as C string literals before embedding them in panic locations.
 - Reject raw pointers nested in struct fields when passing values to spawned tasks.
 - Verify expected stdout for every executable conformance case, including panic cases and intentionally empty output.
