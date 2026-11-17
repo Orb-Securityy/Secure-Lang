@@ -5,7 +5,7 @@
 - Track lexical scope depth for owned expression temporaries.
 - Drop active temporaries on `return` and `?` propagation, preserving values whose ownership transfers to the caller.
 - Drop only temporaries belonging to the loop being exited on `break` and `continue`; preserve outer-expression temporaries.
-- Clean up active temporaries and local owners before explicit `exit()`.
+- Clean up active temporaries and local owners in the current function frame before explicit `exit()`; caller frames remain non-unwinding.
 - Add ASan/UBSan/LSan regression cases for `Result` and `Option` propagation, early return, break and continue.
 
 ## 0.1.1 — hardening update
