@@ -1,0 +1,11 @@
+// EXPECT-EXIT: 0
+fn main() -> i32 {
+    let decimal: u32 = 1_000;
+    let hexadecimal: u32 = 0xA_B;
+    let binary: u32 = 0b10_01;
+    let floating: f64 = 1_2.3_4e5_6;
+    if decimal == 1000 && hexadecimal == 171 && binary == 9 && floating > 0.0 {
+        return 0;
+    }
+    return 1;
+}
