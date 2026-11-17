@@ -24,7 +24,7 @@ KEYWORDS = {
     "continue", "struct", "enum", "impl", "const", "unsafe", "extern", "match", "as",
     "true", "false",
 }
-NUM_RE = re.compile(r"0[xX][0-9a-fA-F_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d[\d_]*)?")
+NUM_RE = re.compile(r"0[xX][0-9a-fA-F_]+|0[bB][01_]+|[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:[eE][+-]?[0-9][0-9_]*)?")
 SUF_RE = re.compile(r"(?:i8|i16|i32|i64|u8|u16|u32|u64|usize|f64)(?![A-Za-z0-9_])")
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 OPS = ["<<=", ">>=", "..=", "->", "=>", "::", "==", "!=", "<=", ">=", "&&", "||", "<<", ">>",
