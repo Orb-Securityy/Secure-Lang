@@ -13,6 +13,20 @@ import glob, os, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECUREC = os.path.join(ROOT, "bin", "securec")
+SANITIZER_MARKERS = (
+    "AddressSanitizer",
+    "LeakSanitizer",
+    "UndefinedBehaviorSanitizer",
+    "runtime error:",
+)
+
+
+def sanitizer_issue(stderr):
+    lowered = stderr.lower()
+    for marker in SANITIZER_MARKERS:
+        if marker.lower() in lowered:
+            return marker
+    return None
 
 
 def headers(path):
@@ -50,6 +64,10 @@ def run_case(path, sanitize):
         return f"compile failed (rc={r.returncode}):\n{r.stderr[:1500]}"
     env = dict(os.environ, ASAN_OPTIONS="detect_leaks=1:abort_on_error=0", UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=0")
     p = subprocess.run([exe], capture_output=True, text=True, env=env, timeout=60, stdin=subprocess.DEVNULL)
+    if sanitize:
+        finding = sanitizer_issue(p.stderr)
+        if finding:
+            return f"sanitizer finding ({finding}) even when this case expected a Secure panic:\\n{p.stderr[:1200]}"
     if h["panic"]:
         if p.returncode != 101:
             return f"expected panic (exit 101), got {p.returncode}\nstderr: {p.stderr[:500]}"
