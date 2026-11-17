@@ -75,6 +75,7 @@ class Compiler:
     def __init__(self, src, filename, forbid_unsafe=False):
         self.src, self.file, self.forbid_unsafe = src, os.path.basename(filename), forbid_unsafe
         self.structs, self.enums, self.fns, self.methods, self.consts = {}, {}, {}, {}, {}
+        self.enum_cnames = {}
         self.decls, self.protos, self.thunks, self.bodies = [], [], [], []
         self.defined, self.inprog, self.spawned = {"Slice_u8", "Vec_u8"}, set(), set()
         self.audit = {"unsafe_blocks": [], "unsafe_fns": [], "extern_fns": []}
@@ -102,7 +103,9 @@ class Compiler:
         return self.tmp(self.ctype(t), "{0}")
 
     def loc(self, n):
-        return f'"{self.file}:{n.line}:{n.col}"'
+        # File names are user-controlled filesystem data, not trusted C source.
+        filename = c_str(os.fsencode(self.file))
+        return f'"{filename}:{n.line}:{n.col}"'
 
     # ------------------------------------------------------------- type layer
     def storable(self, t, n):
@@ -252,7 +255,9 @@ class Compiler:
         if k == "slice": return "Slice_" + self.mangle(t.args[0])
         if k == "vec": return "Vec_" + self.mangle(t.args[0])
         if k == "option": return "Opt_" + self.mangle(t.args[0])
-        if k == "result": return f"Res_{self.mangle(t.args[0])}_{self.mangle(t.args[1])}"
+        if k == "result":
+            ok_name, err_name = (self.mangle(arg) for arg in t.args)
+            return f"Res_{len(ok_name)}_{ok_name}_{len(err_name)}_{err_name}"
         if k == "task": return "Task_" + self.mangle(t.args[0])
         if k == "ptr": return "Ptr_" + self.mangle(t.args[0])
         return "Ref_" + self.mangle(t.args[0])
@@ -358,7 +363,13 @@ class Compiler:
                         self.err("enums need at least one variant and no duplicates", it)
                     self.enums[it.name] = it.variants
                     self.decls.append(f"typedef i32 T_{it.name};")
-                    self.decls.append("enum { " + ", ".join(f"T_{it.name}_{v} = {i}" for i, v in enumerate(it.variants)) + " };")
+                    enumerators = []
+                    for i, variant in enumerate(it.variants):
+                        # C enumerators share one global ordinary-identifier namespace.
+                        cname = f"SEC_ENUM_{len(self.enum_cnames)}"
+                        self.enum_cnames[(it.name, variant)] = cname
+                        enumerators.append(f"{cname} = {i}")
+                    self.decls.append("enum { " + ", ".join(enumerators) + " };")
         for name, info in self.structs.items():
             fields, fseen = [], set()
             for fname, tn, fp in info["node"].fields:
@@ -449,7 +460,8 @@ class Compiler:
             key = (selfty.name, n.name)
             if key in self.methods:
                 self.err(f"duplicate method `{n.name}`", n)
-            cname = f"m_{selfty.name}_{n.name}"
+            # Length-prefix both components; plain underscore joining is ambiguous.
+            cname = f"m_{len(selfty.name)}_{selfty.name}_{len(n.name)}_{n.name}"
         else:
             cname = f"f_{n.name}"
         sig = Sig(n.name, params, ret, cname, n, n.unsafe, n.extern, selfty)
@@ -797,6 +809,21 @@ class Compiler:
         if self.unsafe_depth == 0:
             self.err(f"{what} requires an `unsafe` block", n)
 
+    def contains_raw_pointer(self, t, seen=None):
+        """Inspect aggregate fields as well as generic type arguments."""
+        if t.k == "ptr":
+            return True
+        seen = set() if seen is None else seen
+        if t.k == "struct":
+            if t.name in seen:
+                return False
+            next_seen = seen | {t.name}
+            return any(
+                self.contains_raw_pointer(field_ty, next_seen)
+                for _, field_ty in self.structs[t.name]["fields"]
+            )
+        return any(self.contains_raw_pointer(arg, seen) for arg in t.args)
+
     def consume(self, pl, n):
         t = pl.ty
         if t.k == "slice":
@@ -882,7 +909,7 @@ class Compiler:
             if a in self.enums:
                 if b not in self.enums[a]:
                     self.err(f"enum `{a}` has no variant `{b}`", n)
-                return f"T_{a}_{b}", enum(a)
+                return self.enum_cnames[(a, b)], enum(a)
             if a in INTS and b in ("MAX", "MIN"):
                 lo, hi = int_range(a)
                 return c_int(hi if b == "MAX" else lo, a), I(a)
@@ -1412,7 +1439,7 @@ class Compiler:
                 e(f"pattern `{p[2]}::{p[3]}` does not match a value of type `{tstr(st)}`")
             if p[3] not in self.enums[p[2]]:
                 e(f"enum `{p[2]}` has no variant `{p[3]}`")
-            return f"{s} == T_{p[2]}_{p[3]}", [], [], ("v", p[3])
+            return f"{s} == {self.enum_cnames[(p[2], p[3]) ]}", [], [], ("v", p[3])
         name, sub = p[2], p[3]
         if st.k == "option" and name == "Some":
             cond, pty, init = f"{s}.some", st.args[0], f"{s}.v"
@@ -2025,9 +2052,9 @@ class Compiler:
             self.err("`spawn` expects a function name followed by its arguments: `spawn(work, a, b)`", n)
         sig = self.fns[a0.name]
         for _, _, pt in sig.params:
-            if pt.k == "ref" or has_ptr(pt):
+            if pt.k == "ref" or self.contains_raw_pointer(pt):
                 self.err("a spawned function may only take owned, thread-safe values: no references or raw pointers", n)
-        if sig.unsafe or has_ptr(sig.ret):
+        if sig.unsafe or self.contains_raw_pointer(sig.ret):
             self.err("a spawned function must be safe and must not return raw pointers", n)
         cs = self.lower_args(sig.params, n.args[1:], n)
         R = sig.ret
