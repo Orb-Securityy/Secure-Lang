@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3 — code generation and test-harness correctness
+
+- Generate globally unique C enumerator names, avoiding collisions with other enums and C typedefs.
+- Encode method owner/name components unambiguously in generated C symbols.
+- Escape source basenames as C string literals before embedding them in panic locations.
+- Reject raw pointers nested in struct fields when passing values to spawned tasks.
+- Verify expected stdout for every executable conformance case, including panic cases and intentionally empty output.
+- Add regressions for enum/method symbol collisions, nested raw pointers, source-location escaping, and strict output checking.
+
 ## 0.1.2 — ownership cleanup fix
 
 - Track lexical scope depth for owned expression temporaries.
