@@ -1,0 +1,3 @@
+// EXPECT-PANIC: integer overflow in left shift
+fn id(x: i8) -> i8 { x }
+fn main() -> i32 { let x = id(64); let y = x << 1; return y as i32; }
