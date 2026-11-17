@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11 — source file input diagnostics
+
+- Convert invalid UTF-8 source files into a clear CLI diagnostic instead of leaking `UnicodeDecodeError` tracebacks.
+- Convert missing, unreadable, and other source file I/O errors into a concise CLI diagnostic.
+- Add driver tests verifying nonzero exit status and traceback-free output for invalid UTF-8 and missing files.
+
 ## 0.1.10 — ASCII-only numeric tokenization
 
 - Use explicit ASCII digit ranges throughout decimal, fractional, and exponent portions of numeric literals.
