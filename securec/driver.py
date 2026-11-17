@@ -27,7 +27,20 @@ def report(e, path, src):
 
 
 def compile_source(path, forbid_unsafe=False):
-    src = open(path, encoding="utf-8").read()
+    try:
+        with open(path, encoding="utf-8") as source_file:
+            src = source_file.read()
+    except UnicodeDecodeError as exc:
+        print(
+            f"error: {os.path.basename(path)} is not valid UTF-8 "
+            f"(invalid byte at offset {exc.start})",
+            file=sys.stderr,
+        )
+        return None, None, None
+    except OSError as exc:
+        print(f"error: cannot read source file {os.path.basename(path)}: {exc.strerror or exc}",
+              file=sys.stderr)
+        return None, None, None
     comp = Compiler(src, path, forbid_unsafe)
     try:
         csrc = comp.compile()
