@@ -1,12 +1,10 @@
-fn maybe(x: i32) -> Option<i32> {
-    if x > 0 {
-        return Some(x);
-    } else {
-        return None;
-    }
-}
+// Existing passing enum/Option patterns are used as a mutation seed.
+enum Maybe { Empty, Full }
 fn main() -> i32 {
-    let result: Option<i32> = maybe(4);
-    println(result.is_some());
+    let value = Maybe::Full;
+    match value {
+        Maybe::Empty => println("empty"),
+        Maybe::Full => println("full"),
+    }
     return 0;
 }
