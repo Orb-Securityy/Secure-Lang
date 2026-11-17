@@ -2,10 +2,10 @@
 
 ## 0.1.6 — recursive owned containers
 
-- Forward-declare user struct types and split generated `Vec<T>` descriptors from their value-taking helper implementations.
-- Support recursive owned structures such as `struct Node { children: Vec<Node> }` without emitting functions that take incomplete C types by value.
-- Forward-declare struct drop helpers so recursive vector destructors can call one another safely.
-- Add an ASan/UBSan conformance case that constructs, reads, and drops a recursive node tree.
+- Forward-declare user struct types and split generated `Vec<T>`/`Task<T>` descriptors from helper implementations that take or return `T` by value.
+- Support recursive owned structures such as `struct Node { children: Vec<Node> }` and `Option<Task<Node>>` without emitting functions that use incomplete C types by value.
+- Forward-declare struct drop helpers so recursive vector and task destructors can call one another safely.
+- Add ASan/UBSan conformance cases that construct, read, and drop recursive node structures.
 
 ## 0.1.5 — aggregate stack-size accounting
 
