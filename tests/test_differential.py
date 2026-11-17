@@ -60,11 +60,11 @@ class IntegerCodegenDifferentialTests(unittest.TestCase):
                           str((a < b) and (b != c)).lower()))
 
         cases.extend([
-            ("false && ((1 / 0) == 0)", "false"),
-            ("true || ((1 / 0) == 0)", "true"),
+            ("false && ((1 / zero) == 0)", "false"),
+            ("true || ((1 / zero) == 0)", "true"),
         ])
 
-        source = "fn main() -> i32 {\n"
+        source = "fn main() -> i32 {\n    let zero: i32 = 0;\n"
         source += "".join(f"    println({expr});\n" for expr, _ in cases)
         source += "    return 0;\n}\n"
         generated_c = Compiler(source, "differential_integer_codegen.sec").compile()
