@@ -1,0 +1,13 @@
+// EXPECT-EXIT: 0
+struct Holder {
+    root: Option<Node>,
+}
+
+struct Node {
+    children: Vec<Option<Node>>,
+}
+
+fn main() -> i32 {
+    let holder = Holder { root: None };
+    return 0;
+}
