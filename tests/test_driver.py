@@ -1,10 +1,12 @@
 import contextlib
 import io
 import os
+import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from securec.driver import main
+from securec.driver import cc_build, main
 
 
 class DriverInputTests(unittest.TestCase):
@@ -38,6 +40,74 @@ class DriverInputTests(unittest.TestCase):
             self.assertEqual(result, 1)
             self.assertIn("source nesting exceeds", stderr.getvalue())
             self.assertNotIn("Traceback", stderr.getvalue())
+
+
+    def test_missing_native_compiler_is_reported_without_traceback(self):
+        with tempfile.TemporaryDirectory() as td:
+            output = os.path.join(td, "program")
+            stderr = io.StringIO()
+            with patch("securec.driver.subprocess.run", side_effect=FileNotFoundError("gcc not found")):
+                with contextlib.redirect_stderr(stderr):
+                    result = cc_build("int main(void) { return 0; }", output)
+
+            self.assertFalse(result)
+            self.assertIn("could not start native build", stderr.getvalue())
+            self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_failed_program_launch_is_reported_without_traceback(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "program.sec")
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write("fn main() -> i32 { return 0; }")
+
+            stderr = io.StringIO()
+            with patch("securec.driver.cc_build", return_value=True):
+                with patch("securec.driver.subprocess.run", side_effect=FileNotFoundError("program missing")):
+                    with contextlib.redirect_stderr(stderr):
+                        result = main(["run", path])
+
+            self.assertEqual(result, 2)
+            self.assertIn("cannot execute compiled program", stderr.getvalue())
+            self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_run_temp_directory_failure_is_reported_without_traceback(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "program.sec")
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write("fn main() -> i32 { return 0; }")
+
+            stderr = io.StringIO()
+            with patch("securec.driver.tempfile.TemporaryDirectory", side_effect=OSError("no temporary space")):
+                with contextlib.redirect_stderr(stderr):
+                    result = main(["run", path])
+
+            self.assertEqual(result, 2)
+            self.assertIn("cannot create or clean temporary run directory", stderr.getvalue())
+            self.assertNotIn("Traceback", stderr.getvalue())
+
+
+    def test_run_temp_directory_is_removed_after_execution(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "program.sec")
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write("fn main() -> i32 { return 0; }")
+
+            build_outputs = []
+
+            def fake_build(csrc, output, *args):
+                build_outputs.append(output)
+                return True
+
+            with patch("securec.driver.cc_build", side_effect=fake_build):
+                with patch(
+                    "securec.driver.subprocess.run",
+                    return_value=subprocess.CompletedProcess(["program"], 0),
+                ):
+                    result = main(["run", path])
+
+            self.assertEqual(result, 0)
+            self.assertEqual(len(build_outputs), 1)
+            self.assertFalse(os.path.exists(os.path.dirname(build_outputs[0])))
 
     def test_missing_source_file_is_reported_without_traceback(self):
         with tempfile.TemporaryDirectory() as td:

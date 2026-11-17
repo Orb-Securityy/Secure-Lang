@@ -57,16 +57,22 @@ def compile_source(path, forbid_unsafe=False):
 
 
 def cc_build(csrc, out, opt="-O2", strict=False, sanitize=False):
-    with tempfile.TemporaryDirectory() as td:
-        cpath = os.path.join(td, "out.c")
-        open(cpath, "w").write(csrc)
-        cmd = ["gcc", opt, "-I", HERE] + HARDEN + (["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g"] if sanitize else []) + (["-Wall", "-Wno-unused", "-Wno-type-limits", "-Werror"] if strict
-                                                    else ["-w"]) + [cpath, "-o", out, "-lm"]
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        if r.returncode != 0:
-            print("internal compiler error: generated C failed to build (this is a bug in securec)", file=sys.stderr)
-            print(r.stderr[:4000], file=sys.stderr)
-            return False
+    try:
+        with tempfile.TemporaryDirectory(prefix="secure-build-") as td:
+            cpath = os.path.join(td, "out.c")
+            with open(cpath, "w", encoding="utf-8") as source_file:
+                source_file.write(csrc)
+            cmd = ["gcc", opt, "-I", HERE] + HARDEN + (["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g"] if sanitize else []) + (["-Wall", "-Wno-unused", "-Wno-type-limits", "-Werror"] if strict
+                                                        else ["-w"]) + [cpath, "-o", out, "-lm"]
+            r = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
+    except OSError as exc:
+        print(f"error: could not start native build or access build files: {exc.strerror or exc}",
+              file=sys.stderr)
+        return False
+    if r.returncode != 0:
+        print("internal compiler error: generated C failed to build (this is a bug in securec)", file=sys.stderr)
+        print(r.stderr[:4000], file=sys.stderr)
+        return False
     return True
 
 
@@ -100,14 +106,26 @@ def main(argv=None):
     if a.cmd == "audit":
         print(json.dumps(audit_report(a.file, src, comp), indent=2))
         return 0
-    out = a.output or os.path.splitext(a.file)[0]
     if a.cmd == "run":
-        out = os.path.join(tempfile.mkdtemp(), "secure_prog")
+        try:
+            with tempfile.TemporaryDirectory(prefix="secure-run-") as run_dir:
+                out = os.path.join(run_dir, "secure_prog")
+                if not cc_build(csrc, out, "-O" + a.opt, a.strict_cc, a.sanitize):
+                    return 2
+                try:
+                    r = subprocess.run([out] + a.args)
+                except OSError as exc:
+                    print(f"error: cannot execute compiled program: {exc.strerror or exc}", file=sys.stderr)
+                    return 2
+                return r.returncode
+        except OSError as exc:
+            print(f"error: cannot create or clean temporary run directory: {exc.strerror or exc}",
+                  file=sys.stderr)
+            return 2
+
+    out = a.output or os.path.splitext(a.file)[0]
     if not cc_build(csrc, out, "-O" + a.opt, a.strict_cc, a.sanitize):
         return 2
-    if a.cmd == "run":
-        r = subprocess.run([out] + a.args)
-        return r.returncode
     return 0
 
 
