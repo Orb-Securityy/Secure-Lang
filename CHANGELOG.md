@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 — numeric literal diagnostics
+
+- Reject non-finite floating-point literals as source errors instead of emitting invalid C identifiers such as `inf`.
+- Convert integer literals with an `f64` suffix under overflow handling, reporting a source diagnostic instead of leaking Python `OverflowError`.
+- Add lexer and conformance regressions for oversized decimal exponents and oversized integer-to-f64 literals.
+
 ## 0.1.3 — code generation and test-harness correctness
 
 - Generate globally unique C enumerator names, avoiding collisions with other enums and C typedefs.
