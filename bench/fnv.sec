@@ -1,0 +1,10 @@
+fn main() -> i32 {
+    let mut h: u64 = 14695981039346656037;
+    let mut acc: u64 = 0;
+    for i in 0..300000000u64 {
+        h = wrapping_mul(h ^ (i & 255), 1099511628211);
+        acc += h >> 63;
+    }
+    println(h, " ", acc);
+    return 0;
+}

@@ -1,0 +1,23 @@
+fn main() -> i32 {
+    let n: usize = 400;
+    let mut a: Vec<f64> = Vec::new();
+    let mut b: Vec<f64> = Vec::new();
+    let mut c: Vec<f64> = Vec::new();
+    for i in 0..n * n {
+        a.push((i % 7) as f64 + 0.5);
+        b.push((i % 5) as f64 - 1.5);
+        c.push(0.0);
+    }
+    for i in 0..n {
+        for k in 0..n {
+            let aik = a[i * n + k];
+            for j in 0..n {
+                c[i * n + j] += aik * b[k * n + j];
+            }
+        }
+    }
+    let mut sum = 0.0;
+    for i in 0..n * n { sum += c[i]; }
+    println(sum);
+    return 0;
+}

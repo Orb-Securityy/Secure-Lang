@@ -1,0 +1,26 @@
+// Data-parallel sum. Each worker OWNS its chunk (moved into the thread), so no data race is expressible.
+fn sum_chunk(chunk: Vec<u64>) -> u64 {
+    let mut s: u64 = 0;
+    for i in 0..chunk.len() { s += chunk[i]; }
+    s
+}
+fn main() -> i32 {
+    let workers = 4;
+    let per: u64 = 250000;
+    let mut tasks: Vec<Task<u64>> = Vec::new();
+    for w in 0..workers {
+        let mut chunk: Vec<u64> = Vec::new();
+        let base: u64 = (w as u64) * per;
+        for i in 0..per { chunk.push(base + i); }
+        tasks.push(spawn(sum_chunk, chunk));
+    }
+    let mut total: u64 = 0;
+    loop {
+        match tasks.pop() {
+            Some(t) => { total += t.join(); }
+            None => break,
+        }
+    }
+    println("total = ", total);
+    return 0;
+}
