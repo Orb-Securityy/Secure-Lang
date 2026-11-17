@@ -133,20 +133,24 @@ static inline void *sec_realloc(void *p, usize n, usize sz) {
 
 /* ---- containers (instantiated by the compiler per element type) ----------- */
 #define SEC_DEF_SLICE(S, T) typedef struct { T *p; usize n; } S;
-#define SEC_DEF_VEC(V, T, DROP) \
-typedef struct { T *p; usize len; usize cap; } V; \
+#define SEC_IMPL_VEC(V, T, DROP) \
 static inline V V##_new(void) { V v = {0, 0, 0}; return v; } \
 static inline void V##_push(V *v, T x) { \
     if (v->len == v->cap) { usize nc; if (__builtin_mul_overflow(v->cap, (usize)2, &nc)) sec_panic("capacity overflow", "runtime"); if (nc < 4) nc = 4; \
         v->p = (T *)sec_realloc(v->p, nc, sizeof(T)); v->cap = nc; } \
     v->p[v->len++] = x; } \
 static inline void V##_drop(V *v) { for (usize i = 0; i < v->len; i++) DROP(&v->p[i]); free(v->p); v->p = 0; v->len = 0; v->cap = 0; }
+#define SEC_DEF_VEC(V, T, DROP) \
+typedef struct { T *p; usize len; usize cap; } V; \
+SEC_IMPL_VEC(V, T, DROP)
 #define SEC_DEF_OPT(O, T) typedef struct { bool some; T v; } O;
 #define SEC_DEF_RES(R, T, E) typedef struct { bool ok; T v; E e; } R;
-#define SEC_DEF_TASK(K, R, DROP) \
-typedef struct { pthread_t th; R *res; bool joined; } K; \
+#define SEC_IMPL_TASK(K, R, DROP) \
 static inline R K##_join(K *t) { pthread_join(t->th, NULL); R v = *t->res; free(t->res); t->res = NULL; t->joined = true; return v; } \
 static inline void K##_drop(K *t) { if (!t->joined) { pthread_join(t->th, NULL); DROP(t->res); free(t->res); t->res = NULL; t->joined = true; } }
+#define SEC_DEF_TASK(K, R, DROP) \
+typedef struct { pthread_t th; R *res; bool joined; } K; \
+SEC_IMPL_TASK(K, R, DROP)
 
 SEC_DEF_SLICE(Slice_u8, u8)
 SEC_DEF_VEC(Vec_u8, u8, sec_nodrop)

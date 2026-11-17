@@ -1,0 +1,9 @@
+// EXPECT-EXIT: 0
+struct UnusedOwner {
+    contents: String,
+    children: Vec<String>,
+}
+
+fn main() -> i32 {
+    return 0;
+}

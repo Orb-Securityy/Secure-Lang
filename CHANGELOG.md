@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 — recursive owned containers
+
+- Forward-declare user struct types and split generated `Vec<T>`/`Task<T>` descriptors from helper implementations that take or return `T` by value.
+- Support recursive owned structures such as `struct Node { children: Vec<Node> }` and `Option<Task<Node>>` without emitting functions that use incomplete C types by value.
+- Forward-declare struct drop helpers so recursive vector and task destructors can call one another safely.
+- Add ASan/UBSan conformance cases that construct, read, and drop recursive node structures.
+
 ## 0.1.5 — aggregate stack-size accounting
 
 - Compute a conservative upper bound for inline aggregate sizes, including `Option<T>`, both `Result<T, E>` payloads, and struct padding before applying the 1 MiB array limit.
