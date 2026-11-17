@@ -13,26 +13,26 @@ from securec.lexer import SecError
 class DriverInputTests(unittest.TestCase):
     def test_terminal_safe_escapes_control_and_bidi_characters(self):
         self.assertEqual(
-            terminal_safe("hello\\x1b[31m\\u202e"),
-            "hello\\\\x1b[31m\\\\u202e",
+            terminal_safe("hello\x1b[31m\u202e"),
+            "hello\\x1b[31m\\u202e",
         )
         self.assertEqual(
-            terminal_safe("line one\\nline two", preserve_newlines=True),
-            "line one\\nline two",
+            terminal_safe("line one\nline two", preserve_newlines=True),
+            "line one\nline two",
         )
 
     def test_source_diagnostics_escape_terminal_controls_and_align_caret(self):
         stderr = io.StringIO()
-        source = "a\\x1b[2Jz"
-        filename = "evil\\x1b[2J.sec"
+        source = "a\x1b[2Jz"
+        filename = "evil\x1b[2J.sec"
         with contextlib.redirect_stderr(stderr):
-            report(SecError("bad\\x1b[31m", 1, 2), filename, source)
+            report(SecError("bad\x1b[31m", 1, 2), filename, source)
 
         output = stderr.getvalue()
-        self.assertNotIn("\\x1b", output)
-        self.assertIn("evil\\\\x1b[2J.sec", output)
-        self.assertIn("bad\\\\x1b[31m", output)
-        self.assertIn("a\\\\x1b[2Jz", output)
+        self.assertNotIn("\x1b", output)
+        self.assertIn("evil\\x1b[2J.sec", output)
+        self.assertIn("bad\\x1b[31m", output)
+        self.assertIn("a\\x1b[2Jz", output)
         self.assertIn("   |  ^", output)
 
     def test_invalid_utf8_source_is_reported_without_traceback(self):
