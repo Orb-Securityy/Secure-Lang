@@ -1,0 +1,19 @@
+// EXPECT-EXIT: 1
+struct A {
+    children: Vec<B>,
+}
+
+struct B {
+    parent: Option<A>,
+}
+
+// Compiling this function forces A's layout before main constructs the Vec<B>.
+fn inspect(value: A) -> usize {
+    value.children.len()
+}
+
+fn main() -> i32 {
+    let mut a = A { children: Vec::new() };
+    a.children.push(B { parent: None });
+    return inspect(a) as i32;
+}
