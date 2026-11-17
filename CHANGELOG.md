@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 — aggregate stack-size accounting
+
+- Compute a conservative upper bound for inline aggregate sizes, including `Option<T>`, both `Result<T, E>` payloads, and struct padding before applying the 1 MiB array limit.
+- Traverse both `Result` payloads during recursive inline-type detection, so recursive error types are diagnosed consistently.
+- Add rejection cases for oversized arrays containing large `Option`/`Result` payloads and recursive `Result` error types.
+
 ## 0.1.4 — numeric literal diagnostics
 
 - Reject non-finite floating-point literals as source errors instead of emitting invalid C identifiers such as `inf`.

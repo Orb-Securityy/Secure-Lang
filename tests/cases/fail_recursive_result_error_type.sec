@@ -1,0 +1,6 @@
+// EXPECT-ERR: recursive type `Node` has infinite size
+struct Node { failure: Result<i32, Node> }
+
+fn main() -> i32 {
+    return 0;
+}
