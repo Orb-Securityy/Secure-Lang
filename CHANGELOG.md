@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.18 — build output path safety
+
+- Prevent `securec build` from writing its executable over the source file, including when `-o` names the same path or a symlink/hard link to it.
+- For source files without an extension, choose `<source>.out` instead of reusing and overwriting the source path.
+- Add CLI regressions that verify the source remains unchanged in both cases.
+
 ## 0.1.17 — read_line I/O error handling
 
 - Distinguish end-of-file from a real stdin read failure in the C runtime.
