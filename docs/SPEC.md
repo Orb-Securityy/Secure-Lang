@@ -48,7 +48,7 @@ const N: usize = 4 * 1024;  // integer / f64 / bool / str literal constants, fol
 ### Integer semantics
 `+ - * / %`, unary `-`, `<<`, `>>`, `.pow()`, `.abs()` are **checked**: overflow, division by zero,
 `MIN / -1`, `MIN % -1`, a left shift whose mathematical result does not fit the destination type, shift amount ≥ width, `abs(MIN)` all panic. When both operands are compile-time constants the
-error is reported **at compile time**. `>>` on signed integers is an arithmetic shift.
+error is reported **at compile time**, including when a shift count has an explicit type suffix. `>>` on signed integers is an arithmetic shift.
 
 ### Evaluation order
 Left to right. For calls: all by-value arguments are evaluated first, left to right; then borrows are formed
