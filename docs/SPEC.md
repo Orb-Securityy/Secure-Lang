@@ -82,8 +82,11 @@ listed by `securec audit`; `--forbid-unsafe` rejects them all.
 
 ## 9. Concurrency
 `spawn(f, a, b)` runs `f(a, b)` on a new thread and returns `Task<R>`; `t.join()` yields `R`. Arguments are
-**moved** into the thread; they must be owned values (no references, no raw pointers). Safe code has no global
-mutable state and no stored references, so threads share nothing: data races are not expressible.
+**moved** into the thread; they must be owned values (no references, no raw pointers). The target's reachable
+call graph must also contain no `unsafe` block, `unsafe fn`, or `extern` operation. This conservative effect
+check prevents a safe wrapper from hiding operations that can access shared state outside the ownership model.
+Safe code has no global mutable state and no stored references, so threads share nothing: data races are not
+expressible in the supported safe subset.
 A `Task` dropped without `join` is joined automatically.
 
 ## 10. Built-ins

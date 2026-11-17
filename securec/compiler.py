@@ -2305,6 +2305,57 @@ class Compiler:
         self.emit(f"{r}.some = !__builtin_{op}_overflow({ac}, {bc}, &{r}.v);")
         return r, ot
 
+    def has_unsafe_effect(self, sig, visiting=None):
+        """Conservatively detect unsafe operations reachable from a function.
+
+        Spawned call graphs must not cross an unsafe boundary: an apparently
+        safe wrapper can otherwise hide an extern call or raw-pointer operation
+        from the caller that relies on ownership-transfer thread safety.
+        """
+        if sig.unsafe or sig.extern:
+            return True
+        if visiting is None:
+            visiting = set()
+        key = (sig.selfty.name if sig.selfty else None, sig.name)
+        if key in visiting:
+            return False
+        visiting.add(key)
+
+        def visit(value):
+            if isinstance(value, N):
+                if value.k == "Unsafe":
+                    return True
+                if value.k == "Call":
+                    target = value.fn
+                    if target.k == "Var":
+                        if target.name == "spawn" and value.args:
+                            first = value.args[0]
+                            if first.k == "Var" and first.name in self.fns:
+                                if self.has_unsafe_effect(self.fns[first.name], visiting):
+                                    return True
+                        called = self.fns.get(target.name) if target.name != "spawn" else None
+                        if called is not None and self.has_unsafe_effect(called, visiting):
+                            return True
+                    elif target.k == "Path" and target.segs:
+                        method_name = target.segs[-1]
+                        if any(m.name == method_name and self.has_unsafe_effect(m, visiting)
+                               for m in self.methods.values()):
+                            return True
+                elif value.k == "MethodCall":
+                    # Receiver type resolution is deliberately conservative here:
+                    # if any method with this name has unsafe effects, do not
+                    # certify the containing function as spawn-safe.
+                    if any(m.name == value.name and self.has_unsafe_effect(m, visiting)
+                           for m in self.methods.values()):
+                        return True
+                return any(visit(v) for name, v in value.__dict__.items()
+                           if name not in ("line", "col"))
+            if isinstance(value, (list, tuple)):
+                return any(visit(v) for v in value)
+            return False
+
+        return visit(sig.node.body)
+
     def b_spawn(self, n):
         L, a0 = self.loc(n), (n.args[0] if n.args else None)
         if a0 is None or a0.k != "Var" or a0.name not in self.fns:
@@ -2315,6 +2366,8 @@ class Compiler:
                 self.err("a spawned function may only take owned, thread-safe values: no references or raw pointers", n)
         if sig.unsafe or self.contains_raw_pointer(sig.ret):
             self.err("a spawned function must be safe and must not return raw pointers", n)
+        if self.has_unsafe_effect(sig):
+            self.err("a spawned function's call graph contains an unsafe operation; thread-safety cannot be guaranteed", n)
         cs = self.lower_args(sig.params, n.args[1:], n)
         R = sig.ret
         rc, tk = self.ctype(R), task(R)
