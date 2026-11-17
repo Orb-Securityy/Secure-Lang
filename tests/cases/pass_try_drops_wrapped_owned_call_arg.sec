@@ -1,6 +1,6 @@
 // EXPECT-EXIT: 0
-fn fail_arg() -> Result<i32, i32> {
-    Err(7)
+fn fail_arg(should_fail: bool) -> Result<i32, i32> {
+    if should_fail { Err(7) } else { Ok(9) }
 }
 
 fn consume(value: Option<String>, number: i32) -> i32 {
@@ -10,13 +10,18 @@ fn consume(value: Option<String>, number: i32) -> i32 {
     return 1;
 }
 
-fn work() -> Result<i32, i32> {
-    Ok(consume(Some(String::from("wrapped-owned-argument")), fail_arg()?))
+fn work(should_fail: bool) -> Result<i32, i32> {
+    Ok(consume(Some(String::from("wrapped-owned-argument")), fail_arg(should_fail)?))
 }
 
 fn main() -> i32 {
-    match work() {
-        Ok(value) => { return value; },
-        Err(_) => { return 0; },
+    match work(true) {
+        Ok(_) => { return 1; },
+        Err(_) => {},
     }
+    match work(false) {
+        Ok(value) => { if value == 9 { return 0; } },
+        Err(_) => { return 2; },
+    }
+    return 3;
 }
