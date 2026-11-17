@@ -80,7 +80,8 @@ class Compiler:
         self.vec_impls = []
         self.task_impls = []
         self.pending_types = {}
-        self.pending_defs = []
+        self.completed_pending_types = set()
+        self.emitting_pending_types = False
         self.resolving_struct_fields = False
         self.defined, self.inprog, self.spawned = {"Slice_u8", "Vec_u8"}, set(), set()
         self.audit = {"unsafe_blocks": [], "unsafe_fns": [], "extern_fns": []}
@@ -331,71 +332,116 @@ class Compiler:
     def has_incomplete_inline(self, t):
         """Whether an inline aggregate contains a currently incomplete struct."""
         if t.k == "struct":
-            return self.mangle(t) in self.inprog
+            m = self.mangle(t)
+            return m in self.inprog or m not in self.defined
         if t.k in ("array", "option", "result"):
             return any(self.has_incomplete_inline(arg) for arg in t.args)
         # Vec, Task, slices and pointers store their payload indirectly.
         return False
 
-    def emit_pending_types(self):
-        """Complete wrappers that were forward-declared around recursive indirection."""
-        emitted, active = set(), set()
-
-        def prepare(t):
+    def prepare_inline_type(self, t):
+        """Ensure all by-value dependencies of t have complete C layouts."""
+        if t.k == "struct":
+            m = self.mangle(t)
+            if m in self.inprog:
+                raise SecError(f"recursive type {t.name} has infinite size", 0, 0)
+            if m not in self.defined:
+                self.define(t)
+            return
+        if t.k in ("array", "option", "result"):
+            for arg in t.args:
+                self.prepare_inline_type(arg)
             m = self.mangle(t)
             if m in self.pending_types:
-                emit_one(m)
+                if not self.has_incomplete_inline(t):
+                    self.emit_pending_types()
+                    if m not in self.completed_pending_types:
+                        raise SecError(f"could not complete inline type {tstr(t)}", 0, 0)
+            else:
+                self.ctype(t)
+        # Vec, Task, pointers, references and slices hold their payload
+        # indirectly; their helper implementations are emitted after all types.
+
+    def emit_pending_types(self):
+        """Emit deferred inline wrappers as soon as their by-value dependencies are complete."""
+        if self.emitting_pending_types:
+            return
+        self.emitting_pending_types = True
+        active = set()
+
+        def prepare(t):
+            if t.k == "struct":
+                m = self.mangle(t)
+                if m in self.inprog:
+                    raise SecError(f"recursive inline type {t.name} has infinite size", 0, 0)
+                if m not in self.defined:
+                    self.define(t)
                 return
-            for arg in t.args:
-                prepare(arg)
-            self.ctype(t)
+            if t.k in ("array", "option", "result"):
+                for arg in t.args:
+                    prepare(arg)
+                m = self.mangle(t)
+                if m in self.pending_types:
+                    if not self.has_incomplete_inline(t):
+                        emit_one(m)
+                else:
+                    self.ctype(t)
 
         def emit_one(m):
-            if m in emitted:
+            if m in self.completed_pending_types:
                 return
             if m in active:
                 raise SecError(f"recursive inline type {m} has infinite size", 0, 0)
-            active.add(m)
             t = self.pending_types[m]
+            if self.has_incomplete_inline(t):
+                return
+            active.add(m)
             for arg in t.args:
                 prepare(arg)
             if t.k == "array":
                 el = t.args[0]
                 ce = self.ctype(el)
-                self.pending_defs.append(f"struct {m} {{ {ce} a[{t.n}]; }};")
+                self.decls.append(f"struct {m} {{ {ce} a[{t.n}]; }};")
                 if self.needs_drop(t):
-                    self.pending_defs.append(
+                    self.decls.append(
                         f"static inline void drop_{m}({m} *p) {{ for (usize i = 0; i < {t.n}; i++) "
                         f"{self.drop_stmt(el, 'p->a[i]')} }}"
                     )
             elif t.k == "option":
                 el = t.args[0]
                 ce = self.ctype(el)
-                self.pending_defs.append(f"struct {m} {{ bool some; {ce} v; }};")
+                self.decls.append(f"struct {m} {{ bool some; {ce} v; }};")
                 if self.needs_drop(el):
-                    self.pending_defs.append(
+                    self.decls.append(
                         f"static inline void drop_{m}({m} *p) {{ if (p->some) {self.drop_stmt(el, 'p->v')} }}"
                     )
             elif t.k == "result":
                 ok_ty, err_ty = t.args
                 ct, et = self.ctype(ok_ty), self.ctype(err_ty)
-                self.pending_defs.append(f"struct {m} {{ bool ok; {ct} v; {et} e; }};")
+                self.decls.append(f"struct {m} {{ bool ok; {ct} v; {et} e; }};")
                 if self.needs_drop(t):
                     drop_ok = self.drop_stmt(ok_ty, "p->v") if self.needs_drop(ok_ty) else ""
                     drop_err = self.drop_stmt(err_ty, "p->e") if self.needs_drop(err_ty) else ""
-                    self.pending_defs.append(
+                    self.decls.append(
                         f"static inline void drop_{m}({m} *p) {{ if (p->ok) {{ {drop_ok} }} else {{ {drop_err} }} }}"
                     )
             else:
                 raise SecError(f"internal error: cannot complete pending type {tstr(t)}", 0, 0)
             active.remove(m)
-            emitted.add(m)
+            self.completed_pending_types.add(m)
 
-        while True:
-            todo = [m for m in self.pending_types if m not in emitted]
-            if not todo:
-                break
-            emit_one(todo[0])
+        try:
+            # Resolving a wrapper may itself require an as-yet-unemitted struct.
+            # Repeated passes complete wrappers in dependency order.
+            while True:
+                before = len(self.completed_pending_types)
+                for m, t in list(self.pending_types.items()):
+                    if m not in self.completed_pending_types:
+                        prepare(t)
+                if len(self.completed_pending_types) == before:
+                    break
+        finally:
+            self.emitting_pending_types = False
 
     def define(self, t):
         m = self.mangle(t)
@@ -417,6 +463,8 @@ class Compiler:
                 self.decls.append(f"static inline void drop_{m}({m} *p);")
             self.inprog.add(m)
             fields = self.structs[t.name]["fields"]
+            for _, field_ty in fields:
+                self.prepare_inline_type(field_ty)
             cts = [(f, self.ctype(ft)) for f, ft in fields]
             self.inprog.discard(m)
             body = "".join(f" {ct} f_{f};" for f, ct in cts) or " char _;"
@@ -426,6 +474,7 @@ class Compiler:
             if self.needs_drop(t):
                 inner = " ".join(self.drop_stmt(ft, f"p->f_{f}") for f, ft in fields if self.needs_drop(ft))
                 self.decls.append(f"static inline void drop_{m}({m} *p) {{ {inner} }}")
+            self.emit_pending_types()
             return
         el = t.args[0]
         ce = self.ctype(el) if k != "result" else None
@@ -768,9 +817,12 @@ class Compiler:
 
     def assemble(self):
         self.emit_pending_types()
+        remaining = [m for m in self.pending_types if m not in self.completed_pending_types]
+        if remaining:
+            raise SecError("could not complete deferred inline type(s): " + ", ".join(remaining), 0, 0)
         main = self.fns["main"]
         call = "    i32 r = f_main();" if main.ret == I32 else "    f_main();\n    i32 r = 0;"
-        return "\n".join(['#include "secure_rt.h"'] + self.decls + self.pending_defs + self.vec_impls + self.task_impls + self.protos + self.thunks + self.bodies +
+        return "\n".join(['#include "secure_rt.h"'] + self.decls + self.vec_impls + self.task_impls + self.protos + self.thunks + self.bodies +
                          ["int main(void) {", call, "    fflush(stdout);", "    return (int)r;", "}"]) + "\n"
 
     # --------------------------------------------------------------- statements
