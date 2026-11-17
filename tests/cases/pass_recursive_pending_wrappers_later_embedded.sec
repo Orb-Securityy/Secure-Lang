@@ -1,0 +1,19 @@
+// EXPECT-EXIT: 0
+struct Holder {
+    maybe: Option<Node>,
+    outcome: Result<Node, i32>,
+    nodes: [Node; 1],
+}
+
+struct Node {
+    children: Vec<Option<Node>>,
+}
+
+fn main() -> i32 {
+    let holder = Holder {
+        maybe: None,
+        outcome: Err(1),
+        nodes: [Node { children: Vec::new() }],
+    };
+    return 0;
+}
