@@ -1,6 +1,6 @@
 import unittest
 
-from run_tests import sanitizer_diagnostics, stdout_matches
+from run_tests import headers, input_text, sanitizer_diagnostics, stdout_matches
 
 
 class SanitizerDiagnosticTests(unittest.TestCase):
@@ -27,6 +27,23 @@ class SanitizerDiagnosticTests(unittest.TestCase):
 
     def test_empty_stdout_matches_empty_expectation(self):
         self.assertTrue(stdout_matches("", []))
+
+    def test_stdin_serialization_preserves_empty_and_spaced_lines(self):
+        self.assertEqual(input_text(["first", "", "  spaced ", "last"]), "first\\n\\n  spaced \\nlast\\n")
+        self.assertEqual(input_text([]), "")
+
+    def test_expect_in_headers_preserve_empty_and_spaced_input(self):
+        import os
+        import tempfile
+
+        source = "// EXPECT-IN: first\\n// EXPECT-IN:\\n// EXPECT-IN:  two spaces \\nfn main() {}\\n"
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as stream:
+            stream.write(source)
+            path = stream.name
+        try:
+            self.assertEqual(headers(path)["in"], ["first", "", " two spaces "])
+        finally:
+            os.unlink(path)
 
     def test_expected_stdout_is_compared_exactly(self):
         self.assertTrue(stdout_matches("one\ntwo\n", ["one", "two"]))
