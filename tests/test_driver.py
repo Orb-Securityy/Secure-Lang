@@ -95,6 +95,40 @@ class DriverInputTests(unittest.TestCase):
             self.assertIn("cannot execute compiled program", stderr.getvalue())
             self.assertNotIn("Traceback", stderr.getvalue())
 
+    def test_build_without_extension_does_not_overwrite_source(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "program")
+            source = "fn main() -> i32 { return 0; }"
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write(source)
+
+            outputs = []
+            with patch("securec.driver.cc_build", side_effect=lambda csrc, out, *args: outputs.append(out) or True):
+                result = main(["build", path])
+
+            self.assertEqual(result, 0)
+            self.assertEqual(outputs, [path + ".out"])
+            with open(path, encoding="utf-8") as stream:
+                self.assertEqual(stream.read(), source)
+
+    def test_build_rejects_output_path_equal_to_source(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "program.sec")
+            source = "fn main() -> i32 { return 0; }"
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write(source)
+
+            stderr = io.StringIO()
+            with patch("securec.driver.cc_build") as build:
+                with contextlib.redirect_stderr(stderr):
+                    result = main(["build", path, "-o", path])
+
+            self.assertEqual(result, 2)
+            self.assertFalse(build.called)
+            self.assertIn("output path must differ from the source file", stderr.getvalue())
+            with open(path, encoding="utf-8") as stream:
+                self.assertEqual(stream.read(), source)
+
     def test_run_temp_directory_failure_is_reported_without_traceback(self):
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "program.sec")
