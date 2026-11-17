@@ -24,7 +24,7 @@ KEYWORDS = {
     "continue", "struct", "enum", "impl", "const", "unsafe", "extern", "match", "as",
     "true", "false",
 }
-NUM_RE = re.compile(r"0[xX][0-9a-fA-F_]+|0[bB][01_]+|[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:[eE][+-]?[0-9][0-9_]*)?")
+NUM_RE = re.compile(r"0[xX][0-9a-fA-F]+(?:_[0-9a-fA-F]+)*|0[bB][01]+(?:_[01]+)*|[0-9]+(?:_[0-9]+)*(?:\.[0-9]+(?:_[0-9]+)*)?(?:[eE][+-]?[0-9]+(?:_[0-9]+)*)?")
 SUF_RE = re.compile(r"(?:i8|i16|i32|i64|u8|u16|u32|u64|usize|f64)(?![A-Za-z0-9_])")
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 OPS = ["<<=", ">>=", "..=", "->", "=>", "::", "==", "!=", "<=", ">=", "&&", "||", "<<", ">>",
@@ -78,10 +78,18 @@ def lex(src):
             w = m.group(0); i = m.end()
             toks.append(Tok("kw" if w in KEYWORDS else "ident", w, line, col)); continue
         if "0" <= c <= "9":
+            # A radix prefix must be followed immediately by a valid base digit.
+            if c == "0" and i + 1 < n and src[i + 1] in "xXbB":
+                marker = src[i + 1]
+                valid = "0123456789abcdefABCDEF" if marker in "xX" else "01"
+                if i + 2 >= n or src[i + 2] not in valid:
+                    raise SecError("invalid numeric literal", line, col)
             m = NUM_RE.match(src, i)
             if m is None:
                 raise SecError(f"invalid numeric literal starting with {c!r}", line, col)
             text = m.group(0).replace("_", ""); i = m.end()
+            if i < n and src[i] == "_":
+                raise SecError("numeric separators must appear between digits", line, col)
             suf = None
             ms = SUF_RE.match(src, i)
             if ms:
