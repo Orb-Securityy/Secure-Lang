@@ -1,5 +1,12 @@
 # Changelog
 
+## Test harness — deterministic standard input
+
+- Add `EXPECT-IN:` directives to executable conformance cases so tests can feed exact lines to stdin, including empty lines and leading/trailing spaces.
+- Pass supplied input through `subprocess.run(input=...)` rather than always closing stdin with `/dev/null`.
+- Exercise `read_line` and `parse_i64` with i64 minimum/maximum, numeric overflow, accumulator overflow, explicit plus, malformed signs, empty lines, whitespace, and trailing junk.
+- Add unit tests for stdin header parsing and serialization.
+
 ## 0.1.13 — parser nesting diagnostics
 
 - Convert parser/compiler `RecursionError` from deeply nested source expressions into a concise source diagnostic instead of leaking a Python traceback.
