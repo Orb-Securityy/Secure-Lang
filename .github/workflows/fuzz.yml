@@ -1,0 +1,33 @@
+name: Secure Frontend Fuzzing
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: secure-frontend-fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-fuzz:
+    name: Atheris frontend fuzzing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test-only fuzzer
+        run: python -m pip install --disable-pip-version-check -r requirements-fuzz.txt
+
+      - name: Fuzz lexer, parser, type checker and C lowering
+        run: python tests/fuzz_frontend.py -atheris_runs=30000
