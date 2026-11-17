@@ -1,5 +1,12 @@
 # Changelog
 
+## Test harness — deterministic standard input
+
+- Add `EXPECT-IN:` directives to executable conformance cases so tests can feed exact lines to stdin, including empty lines and leading/trailing spaces.
+- Pass supplied input through `subprocess.run(input=...)` rather than always closing stdin with `/dev/null`.
+- Exercise `read_line` and `parse_i64` with i64 minimum/maximum, numeric overflow, accumulator overflow, explicit plus, malformed signs, empty lines, whitespace, and trailing junk.
+- Add unit tests for stdin header parsing and serialization.
+
 ## 0.1.14 — native toolchain launch diagnostics
 
 - Convert failures to start GCC, access temporary build files, create a run directory, or launch a compiled program into concise CLI diagnostics instead of leaking Python tracebacks.
