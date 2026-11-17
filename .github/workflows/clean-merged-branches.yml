@@ -86,6 +86,44 @@ jobs:
               }
             }
 
+            // These closed/orphaned branches were audited as superseded by later merged work.
+            // Delete only the exact reviewed heads; any branch that moved is preserved.
+            const retiredBranches = [
+              { ref: "fix/non-ascii-lexer-crash", sha: "41653b6e77c82d91b0e6f5e6a6d5ae65a90d9687" },
+              { ref: "fix/source-file-read-diagnostics", sha: "357f7929bd4fbd810a8516c8ac87adf979ee8444" },
+              { ref: "fix/source-file-read-diagnostics-v012", sha: "501a06f470f7f458c3bc412e158b2814c27864e2" },
+              { ref: "test/stdin-conformance-and-integer-boundaries", sha: "a57d3420c6a1a2e05f6e968e92994184a1645947" },
+              { ref: "test/stdin-conformance-main-v013", sha: "571afee5d0b324496ff926df3bef28f8de6232ad" }
+            ];
+
+            for (const branch of retiredBranches) {
+              const key = `${repository}:${branch.ref}`;
+              if (branch.ref === defaultBranch || openHeads.has(key)) {
+                skipped.push(`${branch.ref}: protected or used by an open PR`);
+                continue;
+              }
+
+              try {
+                const current = await github.rest.git.getRef({
+                  owner, repo, ref: `heads/${branch.ref}`
+                });
+                if (current.data.object.sha !== branch.sha) {
+                  skipped.push(`${branch.ref}: no longer matches reviewed stale head`);
+                  continue;
+                }
+                await github.rest.git.deleteRef({
+                  owner, repo, ref: `heads/${branch.ref}`
+                });
+                deleted.push(branch.ref);
+              } catch (error) {
+                if (error.status === 404) {
+                  skipped.push(`${branch.ref}: already absent`);
+                } else {
+                  failures.push(`${branch.ref}: ${error.message}`);
+                }
+              }
+            }
+
             core.info(`Deleted ${deleted.length} merged branch(es).`);
             for (const branch of deleted) core.info(`Deleted: ${branch}`);
             for (const item of skipped) core.info(`Skipped: ${item}`);
