@@ -1,0 +1,4 @@
+fn worker() -> String { String::from("owned result") }
+fn main() {
+    let task = spawn(worker);
+}
