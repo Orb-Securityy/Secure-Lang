@@ -12,6 +12,13 @@ class FrontendRobustnessTests(unittest.TestCase):
                 with self.assertRaises(SecError):
                     lex(literal)
 
+    def test_non_finite_f64_literals_are_source_errors(self):
+        literals = ("1e999", "1e999f64", "9" * 400 + "f64")
+        for literal in literals:
+            with self.subTest(literal=literal[:24]):
+                with self.assertRaisesRegex(SecError, "out of range for f64"):
+                    lex(literal)
+
     def test_deterministic_malformed_token_streams_do_not_crash(self):
         rng = random.Random(0x5EC0)
         fragments = (
