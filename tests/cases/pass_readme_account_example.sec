@@ -1,0 +1,21 @@
+enum Error { Overflow }
+
+struct Account { id: u32, balance: u64 }
+
+impl Account {
+    fn deposit(&mut self, amt: u64) -> Result<u64, Error> {
+        match checked_add(self.balance, amt) {
+            Some(b) => { self.balance = b; Ok(b) },
+            None => Err(Error::Overflow),
+        }
+    }
+}
+
+fn main() -> i32 {
+    let mut account = Account { id: 1, balance: 40 };
+    match account.deposit(2) {
+        Ok(value) => { if value == 42 { return 0; } },
+        Err(_) => { return 1; },
+    }
+    return 2;
+}
