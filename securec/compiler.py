@@ -327,6 +327,8 @@ class Compiler:
         if k == "struct":
             if m in self.inprog:
                 raise SecError(f"recursive type `{t.name}` has infinite size", 0, 0)
+            if self.needs_drop(t):
+                self.decls.append(f"static inline void drop_{m}({m} *p);")
             self.inprog.add(m)
             fields = self.structs[t.name]["fields"]
             cts = [(f, self.ctype(ft)) for f, ft in fields]
@@ -421,12 +423,6 @@ class Compiler:
                 fields.append((fname, self.storable(self.rty(tn, struct(name)), tn)))
             info["fields"] = fields
         self.check_cycles()
-        # Recursive heap-owned structs can have drop helpers that call Vec drops.
-        # Declare those helpers now so deferred container code may call them too.
-        for name in self.structs:
-            st = struct(name)
-            if self.needs_drop(st):
-                self.decls.append(f"static inline void drop_T_{name}(T_{name} *p);")
         for it in items:
             if it.k == "Const":
                 self.add_const(it)
