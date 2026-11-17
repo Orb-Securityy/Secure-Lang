@@ -255,7 +255,9 @@ class Compiler:
         if k == "slice": return "Slice_" + self.mangle(t.args[0])
         if k == "vec": return "Vec_" + self.mangle(t.args[0])
         if k == "option": return "Opt_" + self.mangle(t.args[0])
-        if k == "result": return f"Res_{self.mangle(t.args[0])}_{self.mangle(t.args[1])}"
+        if k == "result":
+            ok_name, err_name = (self.mangle(arg) for arg in t.args)
+            return f"Res_{len(ok_name)}_{ok_name}_{len(err_name)}_{err_name}"
         if k == "task": return "Task_" + self.mangle(t.args[0])
         if k == "ptr": return "Ptr_" + self.mangle(t.args[0])
         return "Ref_" + self.mangle(t.args[0])
