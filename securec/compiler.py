@@ -111,6 +111,19 @@ class Compiler:
                      "in variables, fields or collections, nor returned", n)
         return t
 
+    def const_type_hint(self, n):
+        """Best-effort type hint for a constant integer expression (shift counts have their own type)."""
+        if n.k == "Int":
+            return n.suf
+        if n.k == "Unary" and n.op == "-":
+            return self.const_type_hint(n.e)
+        if n.k == "Var" and self.lookup(n.name) is None and n.name in self.consts:
+            ty = self.consts[n.name][0]
+            return ty.name if ty.k == "int" else None
+        if n.k == "Binary":
+            return self.const_type_hint(n.l) or self.const_type_hint(n.r)
+        return None
+
     def cval(self, n, tname):
         """Constant-evaluate an integer expression of type `tname`; None if not constant."""
         k = n.k
@@ -120,10 +133,15 @@ class Compiler:
             v = self.cval(n.e, tname)
             return None if v is None else self.chk(-v, tname, n)
         if k == "Binary" and (n.op in ARITH or n.op in BITOPS or n.op in ("<<", ">>")):
-            a, b = self.cval(n.l, tname), self.cval(n.r, tname)
+            op = n.op
+            if op in ("<<", ">>"):
+                # Shift counts are typed independently from the shifted value.
+                rhs_type = self.const_type_hint(n.r) or "u32"
+                a, b = self.cval(n.l, tname), self.cval(n.r, rhs_type)
+            else:
+                a, b = self.cval(n.l, tname), self.cval(n.r, tname)
             if a is None or b is None:
                 return None
-            op = n.op
             if op in ("/", "%"):
                 if b == 0:
                     self.err("division by zero in constant expression", n)
