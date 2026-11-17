@@ -1,0 +1,20 @@
+// EXPECT-EXIT: 2
+struct Node {
+    value: i32,
+    children: Vec<Node>,
+    pending: Option<Task<Node>>,
+}
+
+fn main() -> i32 {
+    let mut root = Node {
+        value: 1,
+        children: Vec::new(),
+        pending: None,
+    };
+    root.children.push(Node {
+        value: 2,
+        children: Vec::new(),
+        pending: None,
+    });
+    return root.children[0].value;
+}
