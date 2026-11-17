@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.11 — recursive inline dependency ordering
+
+- Complete deferred `Option<T>`, `Result<T, E>`, and fixed-array wrappers as soon as their by-value struct dependencies are fully defined.
+- Resolve by-value struct field dependencies before emitting the containing C struct body, independent of source declaration order.
+- Keep `Vec<T>` and `Task<T>` payloads indirect so recursive ownership remains supported; defer their helper implementations until all element/result types are complete.
+- Add a regression where `Holder` embeds `Option<Node>` before `Node` is defined, while `Node` itself contains `Vec<Option<Node>>`.
+
 ## 0.1.10 — ASCII-only numeric tokenization
 
 - Use explicit ASCII digit ranges throughout decimal, fractional, and exponent portions of numeric literals.
