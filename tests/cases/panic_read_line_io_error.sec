@@ -1,0 +1,13 @@
+// EXPECT-PANIC: failed to read standard input
+extern fn close(fd: i32) -> i32;
+
+fn main() -> i32 {
+    unsafe {
+        close(0);
+    }
+    let line = read_line();
+    match line {
+        Some(_) => { return 1; },
+        None => { return 0; },
+    }
+}

@@ -88,7 +88,7 @@ A `Task` dropped without `join` is joined automatically.
 
 ## 10. Built-ins
 `print(..)`, `println(..)` (any number of int/float/bool/str/String/enum args), `exit(i32)`, `panic(&str)`,
-`assert(bool)`, `read_line() -> Option<String>`, `parse_i64(&str) -> Option<i64>` (strict, overflow-safe),
+`assert(bool)`, `read_line() -> Option<String>` (`None` on EOF; stdin I/O errors panic), `parse_i64(&str) -> Option<i64>` (strict, overflow-safe),
 `str_eq(&str,&str)`, `ct_eq(&[u8],&[u8])` (no early exit), `zeroize(&mut [u8])` (not elided by the optimizer).
 Methods: `len is_empty as_ptr swap` (arrays/slices/Vec), `Vec: push pop clear get`, `String: push push_str clear`,
 `Option/Result: is_some is_none is_ok is_err unwrap unwrap_or`, `Task: join`, ints: `abs min max pow`,

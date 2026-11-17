@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.17 — read_line I/O error handling
+
+- Distinguish end-of-file from a real stdin read failure in the C runtime.
+- Preserve `None` for EOF; fail fast with a runtime panic if `getline()` reports an I/O error.
+- Add a regression that closes stdin before calling `read_line()` and verifies the I/O error is not silently treated as EOF.
+
 ## 0.1.16 — numeric separator validation
 
 - Require `_` separators to appear strictly between digits in decimal, fractional, exponent, hexadecimal, and binary literals.
