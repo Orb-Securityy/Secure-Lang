@@ -1,6 +1,6 @@
 import unittest
 
-from run_tests import sanitizer_diagnostics
+from run_tests import sanitizer_diagnostics, stdout_matches
 
 
 class SanitizerDiagnosticTests(unittest.TestCase):
@@ -21,6 +21,16 @@ class SanitizerDiagnosticTests(unittest.TestCase):
 
     def test_empty_stderr_is_clean(self):
         self.assertEqual(sanitizer_diagnostics(""), [])
+
+    def test_unexpected_stdout_is_rejected_when_nothing_is_expected(self):
+        self.assertFalse(stdout_matches("unexpected output\\n", []))
+
+    def test_empty_stdout_matches_empty_expectation(self):
+        self.assertTrue(stdout_matches("", []))
+
+    def test_expected_stdout_is_compared_exactly(self):
+        self.assertTrue(stdout_matches("one\\ntwo\\n", ["one", "two"]))
+        self.assertFalse(stdout_matches("one\\nextra\\n", ["one"]))
 
 
 if __name__ == "__main__":
