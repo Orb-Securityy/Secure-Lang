@@ -93,7 +93,9 @@ jobs:
               { ref: "fix/source-file-read-diagnostics", sha: "357f7929bd4fbd810a8516c8ac87adf979ee8444" },
               { ref: "fix/source-file-read-diagnostics-v012", sha: "501a06f470f7f458c3bc412e158b2814c27864e2" },
               { ref: "test/stdin-conformance-and-integer-boundaries", sha: "a57d3420c6a1a2e05f6e968e92994184a1645947" },
-              { ref: "test/stdin-conformance-main-v013", sha: "571afee5d0b324496ff926df3bef28f8de6232ad" }
+              { ref: "test/stdin-conformance-main-v013", sha: "571afee5d0b324496ff926df3bef28f8de6232ad" },
+              { ref: "audit/recursive-wrapper-later-embedded", sha: "e308241c17d78fc1e6e98aced2818fdd488a402c" },
+              { ref: "fix/track-all-owned-expression-temporaries", sha: "c15506e1cbb72deb92504abb652ea7bd4edbb66f" }
             ];
 
             for (const branch of retiredBranches) {
@@ -124,7 +126,7 @@ jobs:
               }
             }
 
-            core.info(`Deleted ${deleted.length} merged branch(es).`);
+            core.info(`Deleted ${deleted.length} branch(es) (merged or explicitly retired).`);
             for (const branch of deleted) core.info(`Deleted: ${branch}`);
             for (const item of skipped) core.info(`Skipped: ${item}`);
             for (const item of failures) core.error(`Failed: ${item}`);
