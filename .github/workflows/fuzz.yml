@@ -1,6 +1,9 @@
 name: Secure Frontend Fuzzing
 
 on:
+  pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * 1"
