@@ -3,8 +3,9 @@
 ## 0.1.14 — native toolchain launch diagnostics
 
 - Convert failures to start GCC, access temporary build files, create a run directory, or launch a compiled program into concise CLI diagnostics instead of leaking Python tracebacks.
+- Use an automatically cleaned temporary directory for `securec run`; compiled executables are removed after the program exits.
 - Preserve normal compile-failure reporting and exit status conventions.
-- Add driver tests for a missing native compiler, failed executable launch, and temporary run-directory failure.
+- Add driver tests for a missing native compiler, failed executable launch, temporary run-directory failure, and cleanup after a successful run.
 
 ## 0.1.13 — parser nesting diagnostics
 
