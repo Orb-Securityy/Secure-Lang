@@ -22,6 +22,23 @@ class DriverInputTests(unittest.TestCase):
             self.assertIn("is not valid UTF-8", stderr.getvalue())
             self.assertNotIn("Traceback", stderr.getvalue())
 
+
+    def test_deeply_nested_source_is_reported_without_traceback(self):
+        nested = "(" * 1200 + "0" + ")" * 1200
+        source = f"fn main() -> i32 {{ return {nested}; }}"
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "deep.sec")
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write(source)
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                result = main(["check", path])
+
+            self.assertEqual(result, 1)
+            self.assertIn("source nesting exceeds", stderr.getvalue())
+            self.assertNotIn("Traceback", stderr.getvalue())
+
     def test_missing_source_file_is_reported_without_traceback(self):
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "missing.sec")
