@@ -1,2 +1,2 @@
-"""Secure language toolchain (bootstrap compiler, v0.1.17)."""
-VERSION = "0.1.17"
+"""Secure language toolchain (bootstrap compiler, v0.1.18)."""
+VERSION = "0.1.18"
