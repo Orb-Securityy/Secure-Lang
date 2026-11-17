@@ -1,0 +1,19 @@
+struct Alpha_Beta {}
+struct Alpha {}
+
+impl Alpha_Beta {
+    fn gamma(self) -> i32 { return 1; }
+}
+
+impl Alpha {
+    fn Beta_gamma(self) -> i32 { return 2; }
+}
+
+fn main() -> i32 {
+    let a = Alpha_Beta {};
+    let b = Alpha {};
+    if a.gamma() == 1 && b.Beta_gamma() == 2 {
+        return 0;
+    }
+    return 1;
+}
