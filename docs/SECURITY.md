@@ -22,6 +22,7 @@ and mechanizing the ownership/borrow rules are roadmap items.
 | Property | Mechanism | Evidence (tests) |
 |---|---|---|
 | **No out-of-bounds access** | every index/slice is range-checked (`SEC_IDX`, slice range check); constant indices into arrays rejected at compile time; index must be `usize` | `panic_array_oob_dynamic`, `panic_vec_oob`, `panic_vec_oob_write`, `panic_slice_oob_param`, `panic_slice_range_invalid/_reversed`, `fail_const_oob_index`, `fail_index_must_be_usize` |
+| **Recursive owned aggregates** | user structs may contain `Vec` of themselves or other recursively linked structs; vector helper implementations are emitted after complete struct declarations | `pass_recursive_vec_struct` |
 | **No dangling pointers after reallocation** | operands that run user code are evaluated *before* any pointer into a container is formed | `pass_realloc_in_args`, `panic_index_operand_clears_vec` (ASan-clean) |
 | **No use-after-free / double free / invalid free** | linear ownership for `String`/`Vec`/`Task`/aggregates; flow-sensitive move checking; automatic drop with run-time drop flags | `fail_use_after_move`, `fail_move_in_loop`, `fail_maybe_moved_branch`, `fail_partial_move`, `pass_moves_flow`, `pass_ownership_torture`, all `pass_*` under ASan/LSan |
 | **No dangling references** | references are second-class: only call arguments; cannot be stored, returned or put in collections | `fail_ref_in_let`, `fail_ref_stored_in_struct`, `fail_ref_returned`, `fail_ref_in_vec` |
