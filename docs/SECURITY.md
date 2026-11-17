@@ -35,6 +35,7 @@ and mechanizing the ownership/borrow rules are roadmap items.
 | **Unsafe is explicit and auditable** | `extern`, `unsafe fn`, raw deref and pointer arithmetic need `unsafe`; `audit` lists every site; `--forbid-unsafe` bans them | `fail_unsafe_call_needs_block`, `fail_raw_deref_needs_unsafe`, `fail_forbid_unsafe_flag`, `pass_unsafe_extern` |
 | **Input validation helpers** | `parse_i64` is strict (no whitespace, sign only, overflow → `None`) | `pass_option_result`, `pass_example_input_validation` |
 | **Malformed source handling** | malformed radix literals produce source diagnostics; deterministic token-stream testing checks that malformed input does not escape as an unhandled front-end exception | `tests/test_frontend.py` |
+| **Cleanup on non-local exits** | active owned temporaries are dropped in reverse creation order on `return`, `?` propagation, `break`, `continue`, and `exit()`; ownership transferred to a return/propagated value is preserved | `pass_try_drops_inflight_borrow`, `pass_option_try_drops_inflight_borrow`, `pass_return_drops_inflight_borrow`, `pass_loop_exit_drops_inflight_borrow` |
 | **Compiler/binary hardening** | PIE, RELRO+BIND_NOW, NX stack, stack protector, stack-clash protection, CET (`-fcf-protection=full`), `_FORTIFY_SOURCE=2`, `-fwrapv`, `-fno-strict-aliasing` | `securec/driver.py: HARDEN` |
 | **Deterministic code generation** | no timestamps/paths/randomness in emitted C | verified: two runs of `emit-c` hash identically |
 
@@ -52,8 +53,7 @@ and mechanizing the ownership/borrow rules are roadmap items.
   Adversarial testing of the compiler (fuzzing, differential testing) has only begun (see `pass_realloc_in_args`).
 * **Panics are fail-fast** (`_exit(101)`, no unwinding, no destructors): an attacker able to trigger a panic gets
   denial of service, not corruption. Resource exhaustion (huge `Vec`, deep recursion → guard-page crash) is not limited.
-* **Leaks are possible** when a temporary is in flight while `?`/`return` leaves an expression, and on `exit`/panic.
-  Leaks are not memory-unsafe, but long-running services should avoid that pattern until fixed.
+* **Panic is fail-fast** (`_exit(101)`): it does not unwind or run destructors. Temporary values and local owners are explicitly cleaned on `return`, `?` propagation, `break`, `continue`, and `exit()`; panic paths remain intentionally non-unwinding.
 * **`ct_eq`/`zeroize` are best effort** (volatile accesses); constant-time behaviour is not verified at machine level.
 * **Not implemented yet** (so *no* security claim is made): cryptographic API safety (no crypto library), secure
   networking/TLS, file I/O policy, dependency integrity / supply-chain tooling (no package manager; only the source
