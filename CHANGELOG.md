@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.10 — ASCII-only numeric tokenization
+
+- Use explicit ASCII digit ranges throughout decimal, fractional, and exponent portions of numeric literals.
+- Reject mixed ASCII/Unicode decimal numerals as source diagnostics instead of accepting Unicode decimal digit classes inconsistently.
+- Add frontend tests for Arabic-Indic and full-width digits inside integer, decimal, exponent, and separated-digit forms.
+
 ## 0.1.9 — lexer character classification
 
 - Restrict identifier and decimal-digit recognition to the same ASCII character set used by the lexer regexes.
