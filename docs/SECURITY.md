@@ -3,7 +3,7 @@
 **Nothing here claims perfect security.** Each property below states *what is enforced, where, and which tests
 demonstrate it*. Tests live in `tests/cases` (`fail_*` must be rejected at compile time, `panic_*` must trap
 with status 101, `pass_*` must run and, under ASan/UBSan/LeakSanitizer, produce no findings). Run
-`python3 tests/run_tests.py` (139 runs at the time of writing).
+`python3 tests/run_tests.py` (the runner reports the exact execution count for the current checkout; compile-fail cases run once and executable cases run in normal and sanitizer modes).
 
 ## 1. Threat model
 In scope: attacker-controlled *program inputs* (stdin, arguments, data) trying to trigger memory corruption,
@@ -26,7 +26,7 @@ and mechanizing the ownership/borrow rules are roadmap items.
 | **No use-after-free / double free / invalid free** | linear ownership for `String`/`Vec`/`Task`/aggregates; flow-sensitive move checking; automatic drop with run-time drop flags | `fail_use_after_move`, `fail_move_in_loop`, `fail_maybe_moved_branch`, `fail_partial_move`, `pass_moves_flow`, `pass_ownership_torture`, all `pass_*` under ASan/LSan |
 | **No dangling references** | references are second-class: only call arguments; cannot be stored, returned or put in collections | `fail_ref_in_let`, `fail_ref_stored_in_struct`, `fail_ref_returned`, `fail_ref_in_vec` |
 | **No aliasing of `&mut`** | exclusivity law per call (`&mut x` excludes any other borrow/move of `x`) | `fail_alias_mut_and_shared`, `fail_alias_two_mut`, `fail_push_str_self_alias`, `fail_borrow_mut_of_immutable`, `fail_shared_ref_to_mut`, `fail_mutate_through_shared` |
-| **No integer overflow/wrap** | checked `+ - * / % neg << >> pow abs`; checked casts; compile-time folding of constants; wrapping is explicit (`wrapping_*`, `as wrapping`) | `panic_add_overflow_i32`, `panic_sub_overflow_u8`, `panic_mul_overflow_i64`, `panic_neg_min`, `panic_div_zero`, `panic_rem_zero`, `panic_div_min_neg1`, `panic_shift_too_far`, `panic_cast_*`, `panic_pow_overflow`, `panic_abs_min`, `fail_const_overflow*`, `fail_literal_out_of_range`, `pass_int_ops` |
+| **No integer overflow/wrap** | checked `+ - * / % neg << >> pow abs`; signed `MIN / -1` and `MIN % -1` trap; left shifts are checked against the destination type's range for signed and unsigned integers; checked casts; compile-time folding of constants; wrapping is explicit (`wrapping_*`, `as wrapping`) | `panic_add_overflow_i32`, `panic_sub_overflow_u8`, `panic_mul_overflow_i64`, `panic_neg_min`, `panic_div_zero`, `panic_rem_zero`, `panic_div_min_neg1`, `panic_rem_min_neg1`, `panic_shift_too_far`, `panic_shift_signed_overflow`, `panic_shift_unsigned_overflow`, `fail_const_shift_overflow`, `panic_cast_*`, `panic_pow_overflow`, `panic_abs_min`, `fail_const_overflow*`, `fail_literal_out_of_range`, `pass_int_ops` |
 | **Null safety** | no null value; absence is `Option<T>`; `match` must be exhaustive | `fail_nonexhaustive_option`, `fail_nonexhaustive_enum`, `fail_none_uninferable`, `panic_unwrap_none` |
 | **No uninitialized memory** | `let` requires an initializer; struct literals must set every field; generated C also compiled with `-ftrivial-auto-var-init=zero` | `fail_uninitialized_let`, `fail_missing_field` |
 | **No type confusion** | no implicit numeric conversions, no unions, no pointer/int casts, only listed `as` conversions | `fail_mismatched_int_types`, `fail_no_implicit_widening`, `fail_cast_bool_from_int`, `fail_cannot_negate_unsigned` |
