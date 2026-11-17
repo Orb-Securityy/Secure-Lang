@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.19 — numeric suffix type validation
+
+- Reject integer suffixes (`i8` through `usize`) when attached to decimal floating-point literals instead of silently discarding the suffix and treating the token as `f64`.
+- Keep suffix-free floats and explicit `f64` suffixes valid, including integer-valued literals such as `1f64`.
+- Add frontend and compile-fail regressions for incompatible suffixes.
+
 ## 0.1.18 — build output path safety
 
 - Prevent `securec build` from writing its executable over the source file, including when `-o` names the same path or a symlink/hard link to it.
