@@ -25,6 +25,11 @@ def sanitizer_diagnostics(stderr):
     ]
 
 
+def stdout_matches(stdout, expected_lines):
+    """Compare stdout even when the expected output is intentionally empty."""
+    return stdout.splitlines() == expected_lines
+
+
 def headers(path):
     h = {"out": [], "err": [], "panic": [], "exit": 0, "flags": []}
     with open(path, encoding="utf-8") as stream:
@@ -103,7 +108,7 @@ def run_case(path, sanitize):
         else:
             if result.returncode != h["exit"]:
                 return f"exit status {result.returncode}, expected {h['exit']}\nstderr: {result.stderr[:800]}"
-            if h["out"] and result.stdout.splitlines() != h["out"]:
+            if not stdout_matches(result.stdout, h["out"]):
                 return "stdout mismatch:\n--- expected\n" + "\n".join(h["out"]) + "\n--- got\n" + result.stdout
             if sanitize and result.stderr.strip():
                 return "unexpected stderr in sanitizer run:\n" + result.stderr[:800]
