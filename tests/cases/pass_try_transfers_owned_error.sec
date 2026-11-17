@@ -1,0 +1,19 @@
+// EXPECT-OUT: propagated error
+fn decide(s: &str, succeed: bool) -> Result<String, String> {
+    if succeed {
+        Ok(String::from("success"))
+    } else {
+        Err(String::from("propagated error"))
+    }
+}
+fn propagate(succeed: bool) -> Result<String, String> {
+    let value = decide(&String::from("borrowed argument"), succeed)?;
+    Ok(value)
+}
+fn main() -> i32 {
+    match propagate(false) {
+        Ok(value) => println("unexpected ", value),
+        Err(message) => println(message),
+    }
+    return 0;
+}
