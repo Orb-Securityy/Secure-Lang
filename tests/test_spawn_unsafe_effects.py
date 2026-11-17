@@ -36,30 +36,30 @@ class SpawnUnsafeEffectTests(unittest.TestCase):
 
     def test_rejects_unsafe_effect_reached_through_instance_method(self):
         self.assert_spawn_rejected(
-            "extern fn mutate_global();\\n"
-            "struct State { value: i32 }\\n"
-            "impl State { fn touch(&self) { unsafe { mutate_global(); } } }\\n"
-            "fn worker(state: State) { state.touch(); }\\n"
+            "extern fn mutate_global();\n"
+            "struct State { value: i32 }\n"
+            "impl State { fn touch(&self) { unsafe { mutate_global(); } } }\n"
+            "fn worker(state: State) { state.touch(); }\n"
             "fn main() { let state = State { value: 0 }; "
-            "let task = spawn(worker, state); task.join(); }\\n"
+            "let task = spawn(worker, state); task.join(); }\n"
         )
 
     def test_rejects_unsafe_effect_reached_through_associated_method(self):
         self.assert_spawn_rejected(
-            "extern fn mutate_global();\\n"
-            "struct State { value: i32 }\\n"
-            "impl State { fn touch() { unsafe { mutate_global(); } } }\\n"
-            "fn worker() { State::touch(); }\\n"
-            "fn main() { let task = spawn(worker); task.join(); }\\n"
+            "extern fn mutate_global();\n"
+            "struct State { value: i32 }\n"
+            "impl State { fn touch() { unsafe { mutate_global(); } } }\n"
+            "fn worker() { State::touch(); }\n"
+            "fn main() { let task = spawn(worker); task.join(); }\n"
         )
 
     def test_rejects_unsafe_effect_in_recursive_call_component(self):
         self.assert_spawn_rejected(
-            "extern fn mutate_global();\\n"
-            "fn first() { second(); }\\n"
-            "fn second() { first(); unsafe { mutate_global(); } }\\n"
-            "fn worker() { first(); }\\n"
-            "fn main() { let task = spawn(worker); task.join(); }\\n"
+            "extern fn mutate_global();\n"
+            "fn first() { second(); }\n"
+            "fn second() { first(); unsafe { mutate_global(); } }\n"
+            "fn worker() { first(); }\n"
+            "fn main() { let task = spawn(worker); task.join(); }\n"
         )
 
     def test_allows_thread_worker_without_unsafe_effects(self):
