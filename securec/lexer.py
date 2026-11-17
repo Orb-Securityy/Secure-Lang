@@ -68,11 +68,20 @@ def lex(src):
             if depth:
                 raise SecError("unterminated block comment", line, col)
             continue
-        if c.isalpha() or c == "_":
-            m = IDENT_RE.match(src, i); w = m.group(0); i = m.end()
+        # Identifier and number patterns are deliberately ASCII-only.
+        # Unicode isalpha()/isdigit() used to route unsupported characters into
+        # ASCII regexes, where match() returned None and leaked AttributeError.
+        if c == "_" or ("A" <= c <= "Z") or ("a" <= c <= "z"):
+            m = IDENT_RE.match(src, i)
+            if m is None:
+                raise SecError(f"unexpected character {c!r}", line, col)
+            w = m.group(0); i = m.end()
             toks.append(Tok("kw" if w in KEYWORDS else "ident", w, line, col)); continue
-        if c.isdigit():
-            m = NUM_RE.match(src, i); text = m.group(0).replace("_", ""); i = m.end()
+        if "0" <= c <= "9":
+            m = NUM_RE.match(src, i)
+            if m is None:
+                raise SecError(f"invalid numeric literal starting with {c!r}", line, col)
+            text = m.group(0).replace("_", ""); i = m.end()
             suf = None
             ms = SUF_RE.match(src, i)
             if ms:
