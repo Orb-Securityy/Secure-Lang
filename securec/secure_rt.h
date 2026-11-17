@@ -145,10 +145,12 @@ typedef struct { T *p; usize len; usize cap; } V; \
 SEC_IMPL_VEC(V, T, DROP)
 #define SEC_DEF_OPT(O, T) typedef struct { bool some; T v; } O;
 #define SEC_DEF_RES(R, T, E) typedef struct { bool ok; T v; E e; } R;
-#define SEC_DEF_TASK(K, R, DROP) \
-typedef struct { pthread_t th; R *res; bool joined; } K; \
+#define SEC_IMPL_TASK(K, R, DROP) \
 static inline R K##_join(K *t) { pthread_join(t->th, NULL); R v = *t->res; free(t->res); t->res = NULL; t->joined = true; return v; } \
 static inline void K##_drop(K *t) { if (!t->joined) { pthread_join(t->th, NULL); DROP(t->res); free(t->res); t->res = NULL; t->joined = true; } }
+#define SEC_DEF_TASK(K, R, DROP) \
+typedef struct { pthread_t th; R *res; bool joined; } K; \
+SEC_IMPL_TASK(K, R, DROP)
 
 SEC_DEF_SLICE(Slice_u8, u8)
 SEC_DEF_VEC(Vec_u8, u8, sec_nodrop)
