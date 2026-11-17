@@ -1,0 +1,11 @@
+// EXPECT-OUT: returned 7
+fn consume(s: &str, value: i32) -> i32 { value }
+fn return_early() -> i32 {
+    consume(&String::from("temporary borrow"), {
+        return 7;
+    })
+}
+fn main() -> i32 {
+    println("returned ", return_early());
+    return 0;
+}
