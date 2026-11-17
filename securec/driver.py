@@ -27,11 +27,11 @@ def terminal_safe(value, preserve_newlines=False):
         else:
             code = ord(ch)
             if code <= 0xFF:
-                out.append(f"\\\\x{code:02x}")
+                out.append(f"\\x{code:02x}")
             elif code <= 0xFFFF:
-                out.append(f"\\\\u{code:04x}")
+                out.append(f"\\u{code:04x}")
             else:
-                out.append(f"\\\\U{code:08x}")
+                out.append(f"\\U{code:08x}")
     return "".join(out)
 
 
