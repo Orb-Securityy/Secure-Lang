@@ -127,6 +127,9 @@ class Compiler:
             if op in ("/", "%"):
                 if b == 0:
                     self.err("division by zero in constant expression", n)
+                lo, _ = int_range(tname)
+                if is_signed(tname) and a == lo and b == -1:
+                    self.err(f"arithmetic overflow in constant expression: {op} does not fit in `{tname}`", n)
                 q = abs(a) // abs(b) * (1 if (a < 0) == (b < 0) else -1)
                 return self.chk(q if op == "/" else a - q * b, tname, n)
             if op in ("<<", ">>"):
@@ -134,8 +137,7 @@ class Compiler:
                     self.err("shift amount out of range in constant expression", n)
                 if op == ">>":
                     return a >> b
-                r = (a << b) & ((1 << int_bits(tname)) - 1)
-                return r - (1 << int_bits(tname)) if is_signed(tname) and r >> (int_bits(tname) - 1) else r
+                return self.chk(a << b, tname, n)
             r = {"+": a + b, "-": a - b, "*": a * b, "&": a & b, "|": a | b, "^": a ^ b}[op]
             return self.chk(r, tname, n)
         if k == "Var" and self.lookup(n.name) is None and n.name in self.consts:
