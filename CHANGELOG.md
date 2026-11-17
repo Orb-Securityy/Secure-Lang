@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.20 — atomic build output installation
+
+- Compile native executables in a temporary directory on the destination filesystem and install them with atomic replacement.
+- Never follow a pre-existing output symlink or truncate a hard-link target; preserve the previous output when compilation fails.
+- Add regressions for symlink targets, hard-link targets, and failed-build preservation.
+- Add a dedicated CI workflow for the Python unit-test suite.
+
 ## 0.1.19 — numeric suffix type validation
 
 - Reject integer suffixes (`i8` through `usize`) when attached to decimal floating-point literals instead of silently discarding the suffix and treating the token as `f64`.
