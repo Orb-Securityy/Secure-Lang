@@ -1,4 +1,5 @@
 """Lexer for Secure."""
+import math
 import re
 
 
@@ -95,7 +96,13 @@ def lex(src):
             except ValueError as exc:
                 raise SecError("invalid numeric literal", line, col) from exc
             if suf == "f64":
-                v, isf, suf = float(v), True, None
+                try:
+                    v = float(v)
+                except OverflowError as exc:
+                    raise SecError("floating-point literal is out of range for f64", line, col) from exc
+                isf, suf = True, None
+            if isf and not math.isfinite(v):
+                raise SecError("floating-point literal is out of range for f64", line, col)
             if isf:
                 toks.append(Tok("float", v, line, col))
             else:
