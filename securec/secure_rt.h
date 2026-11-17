@@ -185,7 +185,12 @@ static inline void sec_print_f64(f64 x) {   /* shortest decimal that round-trips
 static inline bool sec_read_line(Vec_u8 *out) {
     char *line = NULL; size_t cap = 0;
     ssize_t n = getline(&line, &cap, stdin);
-    if (n < 0) { free(line); return false; }
+    if (n < 0) {
+        bool read_error = ferror(stdin) != 0;
+        free(line);
+        if (read_error) sec_panic("failed to read standard input", "runtime");
+        return false;
+    }
     while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) n--;
     for (ssize_t i = 0; i < n; i++) Vec_u8_push(out, (u8)line[i]);
     free(line);
