@@ -1,0 +1,19 @@
+// EXPECT-EXIT: 0
+fn fail_arg() -> Result<i32, i32> {
+    Err(7)
+}
+
+fn consume(value: String, number: i32) -> i32 {
+    return number;
+}
+
+fn work() -> Result<i32, i32> {
+    Ok(consume(String::from("temporary-owned-argument"), fail_arg()?))
+}
+
+fn main() -> i32 {
+    match work() {
+        Ok(value) => { return value; },
+        Err(_) => { return 0; },
+    }
+}
