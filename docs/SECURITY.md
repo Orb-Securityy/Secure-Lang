@@ -47,7 +47,7 @@ and mechanizing the ownership/borrow rules are roadmap items.
 4. Therefore the remaining undefined behaviour sources are: bugs in the TCB (§2) and `unsafe`.
 
 ## 4. Known gaps and limitations (be aware)
-* **Not proven.** Soundness rests on construction + the current conformance suite, deterministic front-end fuzz cases and ASan/UBSan runs, not on a machine-checked proof. The exact run count is emitted by the test runner and changes as cases are added.
+* **Not proven.** Soundness rests on construction + the current conformance suite, deterministic malformed-input tests for the lexer/parser and ASan/UBSan runs, not on a machine-checked proof. The exact run count is emitted by the test runner and changes as cases are added.
   Adversarial testing of the compiler (fuzzing, differential testing) has only begun (see `pass_realloc_in_args`).
 * **Panics are fail-fast** (`_exit(101)`, no unwinding, no destructors): an attacker able to trigger a panic gets
   denial of service, not corruption. Resource exhaustion (huge `Vec`, deep recursion → guard-page crash) is not limited.
