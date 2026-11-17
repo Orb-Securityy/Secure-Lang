@@ -1,0 +1,5 @@
+// EXPECT-ERR: integer suffix cannot be applied to a floating-point literal
+fn main() -> i32 {
+    let value = 1.5u8;
+    return value as i32;
+}
