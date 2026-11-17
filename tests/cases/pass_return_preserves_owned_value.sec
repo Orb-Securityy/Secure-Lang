@@ -1,0 +1,11 @@
+// EXPECT-OUT: returned owned value
+fn consume(s: &str, value: i32) -> String { String::from("unused normal path") }
+fn return_owned() -> String {
+    consume(&String::from("temporary borrow"), {
+        return String::from("returned owned value");
+    })
+}
+fn main() -> i32 {
+    println(return_owned());
+    return 0;
+}

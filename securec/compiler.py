@@ -50,10 +50,10 @@ class Place:
 
 
 class Tmp:
-    __slots__ = ("ty", "lv", "taken")
+    __slots__ = ("ty", "lv", "taken", "scope_depth")
 
-    def __init__(self, ty, lv):
-        self.ty, self.lv, self.taken = ty, lv, False
+    def __init__(self, ty, lv, scope_depth):
+        self.ty, self.lv, self.taken, self.scope_depth = ty, lv, False, scope_depth
 
 
 class Loop:
@@ -522,6 +522,31 @@ class Compiler:
                 self.emit(self.drop_stmt(t.ty, t.lv))
         del self.stmt_temps[mark:]
 
+    def drop_temps_on_exit(self, deeper_than=None, keep=()):
+        """Emit cleanup for live expression temporaries on an abrupt control-flow path.
+
+        Unlike drop_temps(), this does not mutate the compile-time list: sibling
+        branches and the normal path still need their own cleanup code.
+        When leaving a loop, only temporaries created inside that loop are dropped.
+        Values transferred by this exit path can be kept without affecting sibling paths.
+        """
+        keep = set(keep)
+        for t in reversed(self.stmt_temps):
+            if t.taken or t.lv in keep:
+                continue
+            if deeper_than is not None and t.scope_depth <= deeper_than:
+                continue
+            self.emit(self.drop_stmt(t.ty, t.lv))
+
+    def take_temp(self, lv):
+        """Transfer ownership out of a tracked expression temporary."""
+        if not isinstance(lv, str) or not IDENT_RE.fullmatch(lv):
+            return
+        for t in reversed(self.stmt_temps):
+            if t.lv == lv:
+                t.taken = True
+                return
+
     def snap(self):
         return None if self.moved is None else set(self.moved)
 
@@ -701,7 +726,7 @@ class Compiler:
             c = self.tmp(self.ctype(t), c)
         tm = None
         if self.needs_drop(t):
-            tm = Tmp(t, c)
+            tm = Tmp(t, c, len(self.scopes))
             self.stmt_temps.append(tm)
         return Place(c, t, True, None, None, tm)
 
@@ -1234,6 +1259,7 @@ class Compiler:
             self.err("`break` outside of a loop", n)
         lp = self.loops[-1]
         lp.breaks.append(self.snap())
+        self.drop_temps_on_exit(deeper_than=lp.depth)
         self.drops_down_to(lp.depth)
         self.emit("break;")
         return None, NEVER
@@ -1243,6 +1269,7 @@ class Compiler:
             self.err("`continue` outside of a loop", n)
         lp = self.loops[-1]
         lp.conts.append(self.snap())
+        self.drop_temps_on_exit(deeper_than=lp.depth)
         self.drops_down_to(lp.depth)
         self.emit("continue;")
         return None, NEVER
@@ -1252,6 +1279,7 @@ class Compiler:
         if n.e is None:
             if rt != UNIT:
                 self.err(f"`return;` in a function returning `{tstr(rt)}`", n)
+            self.drop_temps_on_exit()
             self.drops_down_to(0)
             self.emit("return;")
             return None, NEVER
@@ -1261,10 +1289,13 @@ class Compiler:
         if t != rt:
             self.err(f"mismatched types: function returns `{tstr(rt)}`, found `{tstr(t)}`", n.e)
         if rt.k == "unit":
+            self.drop_temps_on_exit()
             self.drops_down_to(0)
             self.emit("return;")
         else:
             r = c if IDENT_RE.fullmatch(c) and c.startswith("_t") else self.tmp(self.ctype(rt), c)
+            keep = (r,) if self.needs_drop(rt) else ()
+            self.drop_temps_on_exit(keep=keep)
             self.drops_down_to(0)
             self.emit(f"return {r};")
         return None, NEVER
@@ -1275,14 +1306,20 @@ class Compiler:
             return None, t
         fr = self.fn_ret
         r = c if IDENT_RE.fullmatch(c) else self.tmp(self.ctype(t), c)
+        if self.needs_drop(t):
+            # The result's active payload is transferred either to the caller
+            # on the error path or to the value produced below on the success path.
+            self.take_temp(r)
         if t.k == "result" and fr.k == "result" and t.args[1] == fr.args[1]:
             self.emit(f"if (!{r}.ok) {{")
+            self.drop_temps_on_exit()
             self.drops_down_to(0)
             self.emit(f"return ({self.ctype(fr)}){{.ok = false, .e = {r}.e}};")
             self.emit("}")
             vt = t.args[0]
         elif t.k == "option" and fr.k == "option":
             self.emit(f"if (!{r}.some) {{")
+            self.drop_temps_on_exit()
             self.drops_down_to(0)
             self.emit(f"return ({self.ctype(fr)}){{0}};")
             self.emit("}")
@@ -1918,6 +1955,8 @@ class Compiler:
             c, t = self.expr(args[0], I32)
             if t != I32:
                 self.err("`exit` takes an `i32` status code", args[0])
+            self.drop_temps_on_exit()
+            self.drops_down_to(0)
             self.emit(f"sec_exit({c});")
             return None, NEVER
         if nm == "panic":

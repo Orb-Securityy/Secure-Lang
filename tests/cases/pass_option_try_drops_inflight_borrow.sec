@@ -1,0 +1,13 @@
+// EXPECT-OUT: none
+fn find(s: &str) -> Option<String> { None }
+fn propagate() -> Option<String> {
+    let value = find(&String::from("temporary borrow"))?;
+    Some(value)
+}
+fn main() -> i32 {
+    match propagate() {
+        Some(value) => println("unexpected ", value),
+        None => println("none"),
+    }
+    return 0;
+}

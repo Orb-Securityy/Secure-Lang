@@ -96,5 +96,4 @@ f64: `sqrt abs floor`.
 
 ## 11. Known limitations (v0.1)
 No generics/traits/closures/modules; one compile error reported per run; strings are bytes (no UTF-8 aware API);
-`&s[a..b]` on strings yields `&[u8]`; temporaries still in flight when `?`/`return` exits an expression may leak
-(a leak, never a safety violation); deep recursion can exhaust the stack (guard-page crash, not corruption).
+`&s[a..b]` on strings yields `&[u8]`; fail-fast panic does not unwind or run destructors; deep recursion can exhaust the stack (guard-page crash, not corruption).

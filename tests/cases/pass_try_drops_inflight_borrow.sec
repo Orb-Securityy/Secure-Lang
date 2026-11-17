@@ -1,0 +1,24 @@
+// EXPECT-OUT: error 9
+// EXPECT-OUT: success owned result
+fn choose(s: &str, succeed: bool) -> Result<String, i32> {
+    if succeed {
+        Ok(String::from("owned result"))
+    } else {
+        Err(9)
+    }
+}
+fn propagate(succeed: bool) -> Result<String, i32> {
+    let value = choose(&String::from("temporary borrow"), succeed)?;
+    Ok(value)
+}
+fn main() -> i32 {
+    match propagate(false) {
+        Ok(value) => println("unexpected ", value),
+        Err(code) => println("error ", code),
+    }
+    match propagate(true) {
+        Ok(value) => println("success ", value),
+        Err(code) => println("unexpected error ", code),
+    }
+    return 0;
+}

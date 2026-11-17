@@ -1,0 +1,22 @@
+// EXPECT-OUT: result 42
+fn use_two(a: &str, b: &str, value: i32) -> i32 { value }
+fn use_one(a: &str, value: i32) -> i32 { value }
+fn main() -> i32 {
+    let result = use_two(
+        &String::from("outer temporary one"),
+        &String::from("outer temporary two"),
+        {
+            for i in 0..4 {
+                use_one(&String::from("loop temporary"), {
+                    if i == 0 {
+                        continue;
+                    }
+                    break;
+                });
+            }
+            42
+        }
+    );
+    println("result ", result);
+    return 0;
+}
