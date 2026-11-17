@@ -12,6 +12,20 @@ class FrontendRobustnessTests(unittest.TestCase):
                 with self.assertRaises(SecError):
                     lex(literal)
 
+    def test_numeric_separators_must_be_between_digits(self):
+        valid = ("1_000", "0xA_B", "0b10_01", "1_2.3_4e5_6", "255u8")
+        invalid = (
+            "1_", "1__2", "0xA_", "0xA__B", "0b1_", "0b1__0",
+            "1.2_", "1.2__3", "1e2_", "1e2__3", "0x_", "0b_",
+        )
+        for literal in valid:
+            with self.subTest(valid=literal):
+                lex(literal)
+        for literal in invalid:
+            with self.subTest(invalid=literal):
+                with self.assertRaises(SecError):
+                    lex(literal)
+
     def test_non_ascii_digits_inside_numeric_literals_are_source_errors(self):
         for source in ("12٣", "4.5٦", "1e٢", "7_８"):
             with self.subTest(source=source):
