@@ -79,6 +79,9 @@ class Compiler:
         self.decls, self.protos, self.thunks, self.bodies = [], [], [], []
         self.vec_impls = []
         self.task_impls = []
+        self.pending_types = {}
+        self.pending_defs = []
+        self.resolving_struct_fields = False
         self.defined, self.inprog, self.spawned = {"Slice_u8", "Vec_u8"}, set(), set()
         self.audit = {"unsafe_blocks": [], "unsafe_fns": [], "extern_fns": []}
         self.uid = 0
@@ -217,12 +220,18 @@ class Compiler:
                 self.err("array length must be a constant integer expression", n.size)
             if size < 1:
                 self.err("array length must be at least 1", n.size)
-            if size * self.tsize(el) > MAX_ARRAY_BYTES:
+            if not self.resolving_struct_fields and size * self.tsize(el) > MAX_ARRAY_BYTES:
                 self.err("array too large for the stack (limit 1 MiB); use `Vec<T>` for large buffers", n)
             return array(el, size)
         if k == "TPtr":
             return ptr(self.rty(n.inner, selfty), n.mut)
         self.err("invalid type", n)
+
+    def validate_array_sizes(self, t, n):
+        if t.k == "array" and t.n * self.tsize(t.args[0]) > MAX_ARRAY_BYTES:
+            self.err("array too large for the stack (limit 1 MiB); use `Vec<T>` for large buffers", n)
+        for arg in t.args:
+            self.validate_array_sizes(arg, n)
 
     def tsize(self, t):
         """Conservative upper bound for a value's stack footprint on the 64-bit C ABI.
@@ -319,11 +328,88 @@ class Compiler:
     def dropname(self, t):
         return self.drop_fn(t) if self.needs_drop(t) else "sec_nodrop"
 
+    def has_incomplete_inline(self, t):
+        """Whether an inline aggregate contains a currently incomplete struct."""
+        if t.k == "struct":
+            return self.mangle(t) in self.inprog
+        if t.k in ("array", "option", "result"):
+            return any(self.has_incomplete_inline(arg) for arg in t.args)
+        # Vec, Task, slices and pointers store their payload indirectly.
+        return False
+
+    def emit_pending_types(self):
+        """Complete wrappers that were forward-declared around recursive indirection."""
+        emitted, active = set(), set()
+
+        def prepare(t):
+            m = self.mangle(t)
+            if m in self.pending_types:
+                emit_one(m)
+                return
+            for arg in t.args:
+                prepare(arg)
+            self.ctype(t)
+
+        def emit_one(m):
+            if m in emitted:
+                return
+            if m in active:
+                raise SecError(f"recursive inline type {m} has infinite size", 0, 0)
+            active.add(m)
+            t = self.pending_types[m]
+            for arg in t.args:
+                prepare(arg)
+            if t.k == "array":
+                el = t.args[0]
+                ce = self.ctype(el)
+                self.pending_defs.append(f"struct {m} {{ {ce} a[{t.n}]; }};")
+                if self.needs_drop(t):
+                    self.pending_defs.append(
+                        f"static inline void drop_{m}({m} *p) {{ for (usize i = 0; i < {t.n}; i++) "
+                        f"{self.drop_stmt(el, 'p->a[i]')} }}"
+                    )
+            elif t.k == "option":
+                el = t.args[0]
+                ce = self.ctype(el)
+                self.pending_defs.append(f"struct {m} {{ bool some; {ce} v; }};")
+                if self.needs_drop(el):
+                    self.pending_defs.append(
+                        f"static inline void drop_{m}({m} *p) {{ if (p->some) {self.drop_stmt(el, 'p->v')} }}"
+                    )
+            elif t.k == "result":
+                ok_ty, err_ty = t.args
+                ct, et = self.ctype(ok_ty), self.ctype(err_ty)
+                self.pending_defs.append(f"struct {m} {{ bool ok; {ct} v; {et} e; }};")
+                if self.needs_drop(t):
+                    drop_ok = self.drop_stmt(ok_ty, "p->v") if self.needs_drop(ok_ty) else ""
+                    drop_err = self.drop_stmt(err_ty, "p->e") if self.needs_drop(err_ty) else ""
+                    self.pending_defs.append(
+                        f"static inline void drop_{m}({m} *p) {{ if (p->ok) {{ {drop_ok} }} else {{ {drop_err} }} }}"
+                    )
+            else:
+                raise SecError(f"internal error: cannot complete pending type {tstr(t)}", 0, 0)
+            active.remove(m)
+            emitted.add(m)
+
+        while True:
+            todo = [m for m in self.pending_types if m not in emitted]
+            if not todo:
+                break
+            emit_one(todo[0])
+
     def define(self, t):
         m = self.mangle(t)
         if m in self.defined:
             return
         k = t.k
+        if k in ("array", "option", "result") and self.has_incomplete_inline(t):
+            # These values embed their payload, so their C struct body must wait
+            # until the recursive struct payload is complete. A forward typedef
+            # is enough for a Vec/Task descriptor that stores a pointer to them.
+            self.decls.append(f"typedef struct {m} {m};")
+            self.defined.add(m)
+            self.pending_types[m] = t
+            return
         if k == "struct":
             if m in self.inprog:
                 raise SecError(f"recursive type `{t.name}` has infinite size", 0, 0)
@@ -371,6 +457,10 @@ class Compiler:
                 self.decls.append(f"static inline void drop_{m}({m} *p) {{ if (p->some) {self.drop_stmt(el, 'p->v')} }}")
         elif k == "result":
             ct, et = self.ctype(t.args[0]), self.ctype(t.args[1])
+            # A nested payload may have recursively declared this Result as a
+            # deferred wrapper while the payload struct was being completed.
+            if m in self.defined:
+                return
             self.decls.append(f"SEC_DEF_RES({m}, {ct}, {et})")
             self.defined.add(m)
             if self.needs_drop(t):
@@ -414,6 +504,7 @@ class Compiler:
                     self.decls.append("enum { " + ", ".join(enumerators) + " };")
         for name in self.structs:
             self.decls.append(f"typedef struct T_{name} T_{name};")
+        self.resolving_struct_fields = True
         for name, info in self.structs.items():
             fields, fseen = [], set()
             for fname, tn, fp in info["node"].fields:
@@ -422,7 +513,14 @@ class Compiler:
                 fseen.add(fname)
                 fields.append((fname, self.storable(self.rty(tn, struct(name)), tn)))
             info["fields"] = fields
+        self.resolving_struct_fields = False
         self.check_cycles()
+        # Array limits are checked only after every user struct has a resolved
+        # layout. That lets a legal Vec-indirected recursive array element refer
+        # to an in-progress struct without leaking a TypeError from tsize().
+        for info in self.structs.values():
+            for _, field_ty in info["fields"]:
+                self.validate_array_sizes(field_ty, info["node"])
         for it in items:
             if it.k == "Const":
                 self.add_const(it)
@@ -657,9 +755,10 @@ class Compiler:
         self.bodies.append("\n".join(body))
 
     def assemble(self):
+        self.emit_pending_types()
         main = self.fns["main"]
         call = "    i32 r = f_main();" if main.ret == I32 else "    f_main();\n    i32 r = 0;"
-        return "\n".join(['#include "secure_rt.h"'] + self.decls + self.vec_impls + self.task_impls + self.protos + self.thunks + self.bodies +
+        return "\n".join(['#include "secure_rt.h"'] + self.decls + self.pending_defs + self.vec_impls + self.task_impls + self.protos + self.thunks + self.bodies +
                          ["int main(void) {", call, "    fflush(stdout);", "    return (int)r;", "}"]) + "\n"
 
     # --------------------------------------------------------------- statements

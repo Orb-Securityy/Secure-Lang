@@ -1,0 +1,14 @@
+// EXPECT-EXIT: 2
+struct Node {
+    value: i32,
+    children: Vec<Option<Node>>,
+}
+
+fn main() -> i32 {
+    let mut root = Node { value: 1, children: Vec::new() };
+    root.children.push(Some(Node { value: 2, children: Vec::new() }));
+    if root.children[0].is_some() {
+        return 2;
+    }
+    return 0;
+}

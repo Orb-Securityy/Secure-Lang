@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7 — recursive inline aggregate code generation
+
+- Forward-declare `Option<T>`, `Result<T, E>`, and fixed-array wrapper types when their inline payload references a struct currently being defined through a `Vec` or `Task` indirection.
+- Complete deferred wrapper definitions after all referenced struct layouts are available, then emit their drop helpers before deferred container implementations.
+- Add regressions for `Vec<Option<Node>>`, `Vec<Result<Node, i32>>`, and `Vec<[Node; 1]>`.
+
 ## 0.1.6 — recursive owned containers
 
 - Forward-declare user struct types and split generated `Vec<T>`/`Task<T>` descriptors from helper implementations that take or return `T` by value.

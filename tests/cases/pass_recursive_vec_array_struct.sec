@@ -1,0 +1,11 @@
+// EXPECT-EXIT: 1
+struct Node {
+    value: i32,
+    children: Vec<[Node; 1]>,
+}
+
+fn main() -> i32 {
+    let mut root = Node { value: 1, children: Vec::new() };
+    root.children.push([Node { value: 2, children: Vec::new() }]);
+    return root.children.len() as i32;
+}
