@@ -1,0 +1,21 @@
+// EXPECT-EXIT: 3
+fn consume(value: String, wrapped: Option<String>) -> i32 {
+    if wrapped.is_some() {
+        return value.len() as i32;
+    }
+    return 1;
+}
+
+fn work() -> Result<i32, i32> {
+    Ok(consume(
+        String::from("abc"),
+        Some(String::from("owned-inside-option")),
+    ))
+}
+
+fn main() -> i32 {
+    match work() {
+        Ok(value) => { return value; },
+        Err(_) => { return 0; },
+    }
+}
