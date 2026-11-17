@@ -1,0 +1,5 @@
+// EXPECT-ERR: floating-point literal is out of range for f64
+fn main() -> i32 {
+    let value = 1e999;
+    return 0;
+}
