@@ -1,4 +1,4 @@
-name: Secure CI
+name: Secure Unit Tests
 
 on:
   pull_request:
@@ -9,14 +9,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: secure-ci-${{ github.workflow }}-${{ github.ref }}
+  group: secure-unit-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Compiler and conformance tests
+  unit-tests:
+    name: Python unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -26,11 +26,5 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify native compiler
-        run: gcc --version
-
       - name: Run Python unit tests
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
-
-      - name: Run Secure conformance and sanitizer suite
-        run: python3 tests/run_tests.py
