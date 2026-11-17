@@ -97,6 +97,19 @@ def cc_build(csrc, out, opt="-O2", strict=False, sanitize=False):
     return True
 
 
+def same_file_path(source, output):
+    """Return true for identical paths, symlinks, or hard links."""
+    source_path = os.path.realpath(os.path.abspath(source))
+    output_path = os.path.realpath(os.path.abspath(output))
+    try:
+        if os.path.exists(source_path) and os.path.exists(output_path):
+            if os.path.samefile(source_path, output_path):
+                return True
+    except OSError:
+        pass
+    return os.path.normcase(source_path) == os.path.normcase(output_path)
+
+
 def audit_report(path, src, comp):
     return {"tool": "securec " + VERSION, "source": os.path.basename(path),
             "sha256": hashlib.sha256(src.encode()).hexdigest(),
@@ -144,7 +157,14 @@ def main(argv=None):
                   file=sys.stderr)
             return 2
 
-    out = a.output or os.path.splitext(a.file)[0]
+    if a.output is not None:
+        out = a.output
+    else:
+        stem, extension = os.path.splitext(a.file)
+        out = stem if extension else a.file + ".out"
+    if same_file_path(a.file, out):
+        print("error: output path must differ from the source file", file=sys.stderr)
+        return 2
     if not cc_build(csrc, out, "-O" + a.opt, a.strict_cc, a.sanitize):
         return 2
     return 0
