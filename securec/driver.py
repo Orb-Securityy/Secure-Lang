@@ -20,7 +20,7 @@ def terminal_safe(value, preserve_newlines=False):
     """Escape terminal control/format characters in untrusted diagnostic text."""
     out = []
     for ch in str(value):
-        if ch == "\\n" and preserve_newlines:
+        if ch == "\n" and preserve_newlines:
             out.append(ch)
         elif ch.isprintable():
             out.append(ch)
@@ -70,7 +70,7 @@ def compile_source(path, forbid_unsafe=False):
         return None, None, src
     except RecursionError:
         print(
-            f"error: source nesting exceeds the compiler's supported depth in {os.path.basename(path)}",
+            f"error: source nesting exceeds the compiler's supported depth in {terminal_safe(os.path.basename(path))}",
             file=sys.stderr,
         )
         return None, None, src
