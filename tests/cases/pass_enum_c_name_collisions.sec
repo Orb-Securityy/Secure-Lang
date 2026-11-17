@@ -1,0 +1,20 @@
+struct Foo_A { value: i32 }
+enum Foo { A, B }
+enum A_B { C }
+enum A { B_C }
+
+fn main() -> i32 {
+    let s = Foo_A { value: 42 };
+    let x = Foo::A;
+    let y = A_B::C;
+    let z = A::B_C;
+    match x {
+        Foo::A => {
+            if s.value == 42 && y == A_B::C && z == A::B_C {
+                return 0;
+            }
+        },
+        Foo::B => { return 1; },
+    }
+    return 2;
+}
