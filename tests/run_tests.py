@@ -108,10 +108,11 @@ def run_case(path, sanitize):
         else:
             if result.returncode != h["exit"]:
                 return f"exit status {result.returncode}, expected {h['exit']}\nstderr: {result.stderr[:800]}"
-            if not stdout_matches(result.stdout, h["out"]):
-                return "stdout mismatch:\n--- expected\n" + "\n".join(h["out"]) + "\n--- got\n" + result.stdout
             if sanitize and result.stderr.strip():
                 return "unexpected stderr in sanitizer run:\n" + result.stderr[:800]
+
+        if not stdout_matches(result.stdout, h["out"]):
+            return "stdout mismatch:\n--- expected\n" + "\n".join(h["out"]) + "\n--- got\n" + result.stdout
     return ""
 
 
