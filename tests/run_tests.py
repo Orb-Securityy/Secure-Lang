@@ -30,13 +30,26 @@ def stdout_matches(stdout, expected_lines):
     return stdout.splitlines() == expected_lines
 
 
+def input_text(lines):
+    """Serialize EXPECT-IN header lines as stdin, preserving empty and spaced lines."""
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
 def headers(path):
-    h = {"out": [], "err": [], "panic": [], "exit": 0, "flags": []}
+    h = {"out": [], "err": [], "panic": [], "in": [], "exit": 0, "flags": []}
     with open(path, encoding="utf-8") as stream:
         for line in stream:
             if not line.startswith("//"):
                 break
-            line = line[2:].strip()
+            raw = line[2:].rstrip("\r\n")
+            directive = raw.lstrip(" ")
+            if directive.startswith("EXPECT-IN:"):
+                value = directive[len("EXPECT-IN:"):]
+                if value.startswith(" "):
+                    value = value[1:]
+                h["in"].append(value)
+                continue
+            line = raw.strip()
             for key, name in (("EXPECT-OUT:", "out"), ("EXPECT-ERR:", "err"), ("EXPECT-PANIC:", "panic")):
                 if line.startswith(key):
                     value = line[len(key):]
@@ -89,7 +102,7 @@ def run_case(path, sanitize):
                 text=True,
                 env=env,
                 timeout=60,
-                stdin=subprocess.DEVNULL,
+                input=input_text(h["in"]),
             )
         except subprocess.TimeoutExpired:
             return "program timed out after 60 seconds"

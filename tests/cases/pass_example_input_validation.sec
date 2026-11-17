@@ -1,5 +1,20 @@
-// EXPECT-OUT: accepted=0 rejected=0 total=0
-// Reads untrusted integers from stdin, one per line. Invalid lines are rejected, and the running
+// EXPECT-IN: 9223372036854775807
+// EXPECT-IN: 1
+// EXPECT-IN: -9223372036854775808
+// EXPECT-IN: -9223372036854775809
+// EXPECT-IN: 9223372036854775808
+// EXPECT-IN: +7
+// EXPECT-IN: -
+// EXPECT-IN: 12x
+// EXPECT-IN:
+// EXPECT-IN:  5
+// EXPECT-IN: 5 
+// EXPECT-IN: 999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+// EXPECT-OUT: overflow detected: input ignored
+// EXPECT-OUT: accepted=3 rejected=9 total=6
+// Reads untrusted integers from stdin, one per line. Empty lines, malformed values,
+// whitespace, and values outside the i64 range must be rejected without crashing.
+// total uses checked arithmetic, so hostile input can never wrap around or corrupt memory.
 // total uses checked arithmetic, so hostile input can never wrap around or corrupt memory.
 enum Verdict { Accepted, Rejected, Overflow }
 
