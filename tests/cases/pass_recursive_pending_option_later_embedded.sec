@@ -1,10 +1,10 @@
 // EXPECT-EXIT: 0
-struct Node {
-    children: Vec<Option<Node>>,
-}
-
 struct Holder {
     root: Option<Node>,
+}
+
+struct Node {
+    children: Vec<Option<Node>>,
 }
 
 fn main() -> i32 {
