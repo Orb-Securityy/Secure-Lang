@@ -24,6 +24,6 @@ jobs:
       - name: Verify Python syntax
         run: python -m compileall -q securec tests
       - name: Verify compiler entry point
-        run: test -x bin/securec
+        run: python3 bin/securec --help
       - name: Run conformance suite
         run: python3 tests/run_tests.py
