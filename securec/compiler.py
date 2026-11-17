@@ -633,7 +633,7 @@ class Compiler:
     def assemble(self):
         main = self.fns["main"]
         call = "    i32 r = f_main();" if main.ret == I32 else "    f_main();\n    i32 r = 0;"
-        return "\n".join(['#include "secure_rt.h"'] + self.decls + self.protos + self.thunks + self.bodies +
+        return "\n".join(['#include "secure_rt.h"'] + self.decls + self.vec_impls + self.protos + self.thunks + self.bodies +
                          ["int main(void) {", call, "    fflush(stdout);", "    return (int)r;", "}"]) + "\n"
 
     # --------------------------------------------------------------- statements
