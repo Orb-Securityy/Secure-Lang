@@ -169,6 +169,51 @@ class DriverInputTests(unittest.TestCase):
             with open(path, encoding="utf-8") as stream:
                 self.assertEqual(stream.read(), source)
 
+    def test_build_replaces_symlink_without_overwriting_its_target(self):
+        with tempfile.TemporaryDirectory() as td:
+            target = os.path.join(td, "important-data")
+            output = os.path.join(td, "program")
+            with open(target, "w", encoding="utf-8") as stream:
+                stream.write("keep this data")
+            os.symlink(target, output)
+
+            self.assertTrue(cc_build("int main(void) { return 0; }", output))
+
+            with open(target, encoding="utf-8") as stream:
+                self.assertEqual(stream.read(), "keep this data")
+            self.assertFalse(os.path.islink(output))
+            self.assertTrue(os.access(output, os.X_OK))
+
+    def test_build_replaces_hardlink_without_overwriting_its_target(self):
+        with tempfile.TemporaryDirectory() as td:
+            target = os.path.join(td, "important-data")
+            output = os.path.join(td, "program")
+            with open(target, "w", encoding="utf-8") as stream:
+                stream.write("keep this data")
+            os.link(target, output)
+
+            self.assertTrue(cc_build("int main(void) { return 0; }", output))
+
+            with open(target, encoding="utf-8") as stream:
+                self.assertEqual(stream.read(), "keep this data")
+            self.assertFalse(os.path.samefile(target, output))
+            self.assertTrue(os.access(output, os.X_OK))
+
+    def test_failed_build_preserves_existing_output(self):
+        with tempfile.TemporaryDirectory() as td:
+            output = os.path.join(td, "program")
+            with open(output, "w", encoding="utf-8") as stream:
+                stream.write("previous working output")
+            stderr = io.StringIO()
+            failed = subprocess.CompletedProcess(["gcc"], 1, "", "synthetic compiler failure")
+            with patch("securec.driver.subprocess.run", return_value=failed):
+                with contextlib.redirect_stderr(stderr):
+                    self.assertFalse(cc_build("int main(void) { return 0; }", output))
+
+            with open(output, encoding="utf-8") as stream:
+                self.assertEqual(stream.read(), "previous working output")
+            self.assertIn("synthetic compiler failure", stderr.getvalue())
+
     def test_run_temp_directory_failure_is_reported_without_traceback(self):
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "program.sec")
