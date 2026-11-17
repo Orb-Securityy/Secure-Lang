@@ -79,20 +79,29 @@ def compile_source(path, forbid_unsafe=False):
 
 def cc_build(csrc, out, opt="-O2", strict=False, sanitize=False):
     try:
-        with tempfile.TemporaryDirectory(prefix="secure-build-") as td:
+        # Stage the executable on the destination filesystem, then atomically
+        # replace the directory entry. Passing the requested path directly to
+        # GCC would follow an existing symlink (or truncate a hard-link target)
+        # before the build had even succeeded.
+        output_dir = os.path.dirname(os.path.abspath(out))
+        with tempfile.TemporaryDirectory(prefix=".secure-build-", dir=output_dir) as td:
             cpath = os.path.join(td, "out.c")
+            staged_out = os.path.join(td, "program")
             with open(cpath, "w", encoding="utf-8") as source_file:
                 source_file.write(csrc)
             cmd = ["gcc", opt, "-I", HERE] + HARDEN + (["-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-g"] if sanitize else []) + (["-Wall", "-Wno-unused", "-Wno-type-limits", "-Werror"] if strict
-                                                        else ["-w"]) + [cpath, "-o", out, "-lm"]
+                                                        else ["-w"]) + [cpath, "-o", staged_out, "-lm"]
             r = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
+            if r.returncode != 0:
+                print("internal compiler error: generated C failed to build (this is a bug in securec)", file=sys.stderr)
+                print(terminal_safe(r.stderr[:4000], preserve_newlines=True), file=sys.stderr)
+                return False
+            # os.replace replaces a symlink/hard-link directory entry itself;
+            # it never follows the link and leaves its former target untouched.
+            os.replace(staged_out, out)
     except OSError as exc:
-        print(f"error: could not start native build or access build files: {terminal_safe(exc.strerror or exc)}",
+        print(f"error: could not start native build or safely install build output: {terminal_safe(exc.strerror or exc)}",
               file=sys.stderr)
-        return False
-    if r.returncode != 0:
-        print("internal compiler error: generated C failed to build (this is a bug in securec)", file=sys.stderr)
-        print(terminal_safe(r.stderr[:4000], preserve_newlines=True), file=sys.stderr)
         return False
     return True
 
