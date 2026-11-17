@@ -1,0 +1,107 @@
+name: Clean merged branches
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: clean-merged-branches
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete merged PR branches safely
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove branches whose PRs are merged
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const repository = `${owner}/${repo}`;
+            const defaultBranch = context.payload.repository?.default_branch ?? "main";
+
+            const [closed, open] = await Promise.all([
+              github.paginate(github.rest.pulls.list, {
+                owner, repo, state: "closed", per_page: 100
+              }),
+              github.paginate(github.rest.pulls.list, {
+                owner, repo, state: "open", per_page: 100
+              })
+            ]);
+
+            const openHeads = new Set(
+              open
+                .filter(pr => pr.head.repo)
+                .map(pr => `${pr.head.repo.full_name}:${pr.head.ref}`)
+            );
+
+            const seen = new Set();
+            const deleted = [];
+            const skipped = [];
+            const failures = [];
+
+            for (const pr of closed) {
+              const head = pr.head;
+              if (!pr.merged_at || !head.repo || head.repo.full_name !== repository) continue;
+              if (!head.ref || head.ref === defaultBranch) continue;
+
+              const key = `${repository}:${head.ref}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+
+              if (openHeads.has(key)) {
+                skipped.push(`${head.ref}: used by an open PR`);
+                continue;
+              }
+
+              try {
+                const current = await github.rest.git.getRef({
+                  owner, repo, ref: `heads/${head.ref}`
+                });
+
+                // Preserve branches that received commits after the merged PR.
+                if (current.data.object.sha !== head.sha) {
+                  skipped.push(`${head.ref}: advanced after merge`);
+                  continue;
+                }
+
+                await github.rest.git.deleteRef({
+                  owner, repo, ref: `heads/${head.ref}`
+                });
+                deleted.push(head.ref);
+              } catch (error) {
+                if (error.status === 404) {
+                  skipped.push(`${head.ref}: already absent`);
+                } else {
+                  failures.push(`${head.ref}: ${error.message}`);
+                }
+              }
+            }
+
+            core.info(`Deleted ${deleted.length} merged branch(es).`);
+            for (const branch of deleted) core.info(`Deleted: ${branch}`);
+            for (const item of skipped) core.info(`Skipped: ${item}`);
+            for (const item of failures) core.error(`Failed: ${item}`);
+
+            await core.summary
+              .addHeading("Merged branch cleanup")
+              .addTable([
+                [{data: "Result", header: true}, {data: "Count", header: true}],
+                ["Deleted", String(deleted.length)],
+                ["Skipped", String(skipped.length)],
+                ["Failed", String(failures.length)]
+              ])
+              .addList([...deleted.map(x => `Deleted: ${x}`), ...skipped.map(x => `Skipped: ${x}`), ...failures.map(x => `Failed: ${x}`)])
+              .write();
+
+            if (failures.length) {
+              core.setFailed(`${failures.length} branch deletion(s) failed; inspect the workflow summary.`);
+            }
