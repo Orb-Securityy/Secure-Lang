@@ -78,6 +78,7 @@ class Compiler:
         self.enum_cnames = {}
         self.decls, self.protos, self.thunks, self.bodies = [], [], [], []
         self.vec_impls = []
+        self.task_impls = []
         self.defined, self.inprog, self.spawned = {"Slice_u8", "Vec_u8"}, set(), set()
         self.audit = {"unsafe_blocks": [], "unsafe_fns": [], "extern_fns": []}
         self.uid = 0
@@ -375,8 +376,14 @@ class Compiler:
                 b = self.drop_stmt(t.args[1], "p->e") if self.needs_drop(t.args[1]) else ""
                 self.decls.append(f"static inline void drop_{m}({m} *p) {{ if (p->ok) {{ {a} }} else {{ {b} }} }}")
         elif k == "task":
-            self.decls.append(f"SEC_DEF_TASK({m}, {ce}, {self.dropname(el)})")
+            # Task stores only a result pointer, so its descriptor can be
+            # declared while the result type is incomplete. Its join helper
+            # (which returns R by value) is emitted after all structs complete.
+            dn = self.dropname(el)
+            self.decls.append(f"typedef struct {{ pthread_t th; {ce} *res; bool joined; }} {m};")
+            self.decls.append(f"static inline void {m}_drop({m} *t);")
             self.defined.add(m)
+            self.task_impls.append(f"SEC_IMPL_TASK({m}, {ce}, {dn})")
         else:
             raise SecError(f"internal error: cannot define type {tstr(t)}", 0, 0)
 
@@ -656,7 +663,7 @@ class Compiler:
     def assemble(self):
         main = self.fns["main"]
         call = "    i32 r = f_main();" if main.ret == I32 else "    f_main();\n    i32 r = 0;"
-        return "\n".join(['#include "secure_rt.h"'] + self.decls + self.vec_impls + self.protos + self.thunks + self.bodies +
+        return "\n".join(['#include "secure_rt.h"'] + self.decls + self.vec_impls + self.task_impls + self.protos + self.thunks + self.bodies +
                          ["int main(void) {", call, "    fflush(stdout);", "    return (int)r;", "}"]) + "\n"
 
     # --------------------------------------------------------------- statements
