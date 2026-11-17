@@ -530,6 +530,15 @@ class Compiler:
 
     # ------------------------------------------------------------ declarations
     def compile(self):
+        """Compile source and normalize Python recursion exhaustion as a source error."""
+        try:
+            return self._compile()
+        except RecursionError as exc:
+            raise SecError(
+                "source nesting exceeds the compiler's supported depth", 0, 0
+            ) from exc
+
+    def _compile(self):
         items = parse(self.src)
         seen = set()
         for it in items:
