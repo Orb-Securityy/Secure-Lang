@@ -1,0 +1,26 @@
+struct A { x: i32 }
+struct B_T_C { x: i32 }
+struct A_T_B { x: i32 }
+struct C { x: i32 }
+
+fn first_result() -> Result<A, B_T_C> {
+    Ok(A { x: 1 })
+}
+
+fn second_result() -> Result<A_T_B, C> {
+    Ok(A_T_B { x: 2 })
+}
+
+fn main() -> i32 {
+    let first = first_result();
+    let second = second_result();
+    match first {
+        Ok(value) => { if value.x != 1 { return 1; } },
+        Err(_) => { return 2; },
+    }
+    match second {
+        Ok(value) => { if value.x != 2 { return 3; } },
+        Err(_) => { return 4; },
+    }
+    return 0;
+}
