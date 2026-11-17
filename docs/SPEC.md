@@ -47,7 +47,7 @@ const N: usize = 4 * 1024;  // integer / f64 / bool / str literal constants, fol
 
 ### Integer semantics
 `+ - * / %`, unary `-`, `<<`, `>>`, `.pow()`, `.abs()` are **checked**: overflow, division by zero,
-`MIN / -1`, shift amount ≥ width, `abs(MIN)` all panic. When both operands are compile-time constants the
+`MIN / -1`, `MIN % -1`, a left shift whose mathematical result does not fit the destination type, shift amount ≥ width, `abs(MIN)` all panic. When both operands are compile-time constants the
 error is reported **at compile time**. `>>` on signed integers is an arithmetic shift.
 
 ### Evaluation order
