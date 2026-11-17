@@ -1,0 +1,13 @@
+// Existing passing ownership/borrow and collection coverage.
+fn sum(xs: &[i32]) -> i32 {
+    let mut s = 0;
+    for i in 0..xs.len() { s += xs[i]; }
+    s
+}
+fn main() -> i32 {
+    let mut values = [1, 2, 3, 4, 5];
+    println(sum(&values));
+    values[0] = 9;
+    println(sum(&values));
+    return 0;
+}

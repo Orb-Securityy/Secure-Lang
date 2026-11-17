@@ -1,0 +1,7 @@
+// Existing negative borrow-checker case; a diagnostic is expected.
+fn f(a: &mut [i32], b: &mut [i32]) { a[0] = b[0]; }
+fn main() -> i32 {
+    let mut v = [1, 2, 3, 4];
+    f(&mut v[0..2], &mut v[2..4]);
+    return 0;
+}

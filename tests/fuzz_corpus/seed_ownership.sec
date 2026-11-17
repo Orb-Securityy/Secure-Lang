@@ -1,0 +1,17 @@
+// Existing passing ownership/borrow case.
+struct Named { name: String, scores: Vec<i32> }
+fn total(v: &Vec<i32>) -> i64 {
+    let mut s: i64 = 0;
+    for i in 0..v.len() { s += v[i] as i64; }
+    s
+}
+fn main() -> i32 {
+    let mut v: Vec<i32> = Vec::new();
+    v.push(3);
+    v.push(5);
+    println(total(&v));
+    let name = String::from("secure");
+    let item = Named { name: name, scores: v };
+    println(item.name.as_str(), " ", item.scores.len());
+    return 0;
+}

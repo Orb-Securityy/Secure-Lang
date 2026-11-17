@@ -1,0 +1,10 @@
+// Existing passing enum/Option patterns are used as a mutation seed.
+enum Maybe { Empty, Full }
+fn main() -> i32 {
+    let value = Maybe::Full;
+    match value {
+        Maybe::Empty => println("empty"),
+        Maybe::Full => println("full"),
+    }
+    return 0;
+}
