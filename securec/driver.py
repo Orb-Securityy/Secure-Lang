@@ -16,14 +16,35 @@ HARDEN = ["-std=gnu11", "-fstack-protector-strong", "-fstack-clash-protection", 
           "-ftrivial-auto-var-init=zero", "-Wl,-z,relro,-z,now,-z,noexecstack", "-pthread"]
 
 
+def terminal_safe(value, preserve_newlines=False):
+    """Escape terminal control/format characters in untrusted diagnostic text."""
+    out = []
+    for ch in str(value):
+        if ch == "\\n" and preserve_newlines:
+            out.append(ch)
+        elif ch.isprintable():
+            out.append(ch)
+        else:
+            code = ord(ch)
+            if code <= 0xFF:
+                out.append(f"\\\\x{code:02x}")
+            elif code <= 0xFFFF:
+                out.append(f"\\\\u{code:04x}")
+            else:
+                out.append(f"\\\\U{code:08x}")
+    return "".join(out)
+
+
 def report(e, path, src):
     lines = src.splitlines()
-    print(f"error: {e.msg}", file=sys.stderr)
+    print(f"error: {terminal_safe(e.msg)}", file=sys.stderr)
     if e.line:
-        print(f"  --> {os.path.basename(path)}:{e.line}:{e.col}", file=sys.stderr)
+        print(f"  --> {terminal_safe(os.path.basename(path))}:{e.line}:{e.col}", file=sys.stderr)
         if 0 < e.line <= len(lines):
-            print(f"   | {lines[e.line - 1]}", file=sys.stderr)
-            print(f"   | {' ' * max(e.col - 1, 0)}^", file=sys.stderr)
+            line = lines[e.line - 1]
+            prefix = line[:max(e.col - 1, 0)]
+            print(f"   | {terminal_safe(line)}", file=sys.stderr)
+            print(f"   | {' ' * len(terminal_safe(prefix))}^", file=sys.stderr)
 
 
 def compile_source(path, forbid_unsafe=False):
@@ -32,13 +53,13 @@ def compile_source(path, forbid_unsafe=False):
             src = source_file.read()
     except UnicodeDecodeError as exc:
         print(
-            f"error: {os.path.basename(path)} is not valid UTF-8 "
+            f"error: {terminal_safe(os.path.basename(path))} is not valid UTF-8 "
             f"(invalid byte at offset {exc.start})",
             file=sys.stderr,
         )
         return None, None, None
     except OSError as exc:
-        print(f"error: cannot read source file {os.path.basename(path)}: {exc.strerror or exc}",
+        print(f"error: cannot read source file {terminal_safe(os.path.basename(path))}: {terminal_safe(exc.strerror or exc)}",
               file=sys.stderr)
         return None, None, None
     comp = Compiler(src, path, forbid_unsafe)
@@ -66,12 +87,12 @@ def cc_build(csrc, out, opt="-O2", strict=False, sanitize=False):
                                                         else ["-w"]) + [cpath, "-o", out, "-lm"]
             r = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     except OSError as exc:
-        print(f"error: could not start native build or access build files: {exc.strerror or exc}",
+        print(f"error: could not start native build or access build files: {terminal_safe(exc.strerror or exc)}",
               file=sys.stderr)
         return False
     if r.returncode != 0:
         print("internal compiler error: generated C failed to build (this is a bug in securec)", file=sys.stderr)
-        print(r.stderr[:4000], file=sys.stderr)
+        print(terminal_safe(r.stderr[:4000], preserve_newlines=True), file=sys.stderr)
         return False
     return True
 
@@ -115,11 +136,11 @@ def main(argv=None):
                 try:
                     r = subprocess.run([out] + a.args)
                 except OSError as exc:
-                    print(f"error: cannot execute compiled program: {exc.strerror or exc}", file=sys.stderr)
+                    print(f"error: cannot execute compiled program: {terminal_safe(exc.strerror or exc)}", file=sys.stderr)
                     return 2
                 return r.returncode
         except OSError as exc:
-            print(f"error: cannot create or clean temporary run directory: {exc.strerror or exc}",
+            print(f"error: cannot create or clean temporary run directory: {terminal_safe(exc.strerror or exc)}",
                   file=sys.stderr)
             return 2
 
