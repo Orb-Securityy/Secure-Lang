@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9 — lexer character classification
+
+- Restrict identifier and decimal-digit recognition to the same ASCII character set used by the lexer regexes.
+- Report unsupported non-ASCII identifier/digit characters as source diagnostics instead of leaking a Python `AttributeError`.
+- Add regression tests for accented Latin, Greek, Arabic-Indic, and full-width digit characters.
+
 ## 0.1.8 — owned expression temporary tracking
 
 - Track every owned expression result, not only temporaries created while forming borrowed call arguments.

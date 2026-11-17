@@ -12,6 +12,12 @@ class FrontendRobustnessTests(unittest.TestCase):
                 with self.assertRaises(SecError):
                     lex(literal)
 
+    def test_non_ascii_identifier_and_digit_characters_are_source_errors(self):
+        for source in ("é", "λ", "١", "４"):
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    lex(source)
+
     def test_non_finite_f64_literals_are_source_errors(self):
         literals = ("1e999", "1e999f64", "9" * 400 + "f64")
         for literal in literals:
