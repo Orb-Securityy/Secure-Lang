@@ -77,10 +77,23 @@ def lex(src):
             if ms:
                 suf = ms.group(0); i = ms.end()
             low = text.lower()
-            if low.startswith("0x"): v, isf = int(text[2:], 16), False
-            elif low.startswith("0b"): v, isf = int(text[2:], 2), False
-            elif "." in text or "e" in low: v, isf = float(text), True
-            else: v, isf = int(text, 10), False
+            try:
+                if low.startswith("0x"):
+                    digits = text[2:].replace("_", "")
+                    if not digits:
+                        raise ValueError("missing hexadecimal digits")
+                    v, isf = int(digits, 16), False
+                elif low.startswith("0b"):
+                    digits = text[2:].replace("_", "")
+                    if not digits:
+                        raise ValueError("missing binary digits")
+                    v, isf = int(digits, 2), False
+                elif "." in text or "e" in low:
+                    v, isf = float(text.replace("_", "")), True
+                else:
+                    v, isf = int(text.replace("_", ""), 10), False
+            except ValueError as exc:
+                raise SecError("invalid numeric literal", line, col) from exc
             if suf == "f64":
                 v, isf, suf = float(v), True, None
             if isf:
