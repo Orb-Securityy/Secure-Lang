@@ -2,7 +2,7 @@
 
 ## 1. Lexical
 `//` and nested `/* */` comments. Integer literals: decimal, `0x`, `0b`, `_` separators (only between digits), optional suffix
-(`i8 i16 i32 i64 u8 u16 u32 u64 usize`). Float literals are `f64`. `'a'` is a `u8` ASCII literal.
+(`i8 i16 i32 i64 u8 u16 u32 u64 usize`); these suffixes are valid only on integer literals. Float literals are `f64` by default and may use the `f64` suffix. `'a'` is a `u8` ASCII literal.
 String literals are byte strings (UTF-8 source, escapes `\n \r \t \\ \" \' \0 \xHH`).
 Keywords: `fn let mut if else while loop for in return break continue struct enum impl const unsafe extern match as true false`.
 
