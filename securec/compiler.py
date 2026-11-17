@@ -77,6 +77,7 @@ class Compiler:
         self.structs, self.enums, self.fns, self.methods, self.consts = {}, {}, {}, {}, {}
         self.enum_cnames = {}
         self.decls, self.protos, self.thunks, self.bodies = [], [], [], []
+        self.vec_impls = []
         self.defined, self.inprog, self.spawned = {"Slice_u8", "Vec_u8"}, set(), set()
         self.audit = {"unsafe_blocks": [], "unsafe_fns": [], "extern_fns": []}
         self.uid = 0
@@ -289,6 +290,11 @@ class Compiler:
         if k == "str": return "Slice_u8"
         if k == "string": return "Vec_u8"
         if k == "enum": return "T_" + t.name
+        if k == "struct":
+            m = self.mangle(t)
+            if m not in self.inprog:
+                self.define(t)
+            return m
         if k == "ref":
             i = t.args[0]
             return self.ctype(i) if i.k in ("slice", "str") else self.ctype(i) + "*"
@@ -325,7 +331,8 @@ class Compiler:
             cts = [(f, self.ctype(ft)) for f, ft in fields]
             self.inprog.discard(m)
             body = "".join(f" {ct} f_{f};" for f, ct in cts) or " char _;"
-            self.decls.append(f"typedef struct {m} {{{body} }} {m};")
+            # Struct aliases are forward-declared in compile().
+            self.decls.append(f"struct {m} {{{body} }};")
             self.defined.add(m)
             if self.needs_drop(t):
                 inner = " ".join(self.drop_stmt(ft, f"p->f_{f}") for f, ft in fields if self.needs_drop(ft))
@@ -333,6 +340,10 @@ class Compiler:
             return
         el = t.args[0]
         ce = self.ctype(el) if k != "result" else None
+        # Resolving an element type can recursively finish this Vec while its
+        # owner struct is being defined (e.g. struct Node { children: Vec<Node> }).
+        if m in self.defined:
+            return
         if k == "array":
             self.decls.append(f"typedef struct {{ {ce} a[{t.n}]; }} {m};")
             self.defined.add(m)
@@ -344,8 +355,12 @@ class Compiler:
             self.defined.add(m)
         elif k == "vec":
             dn = self.dropname(el)
-            self.decls.append(f"SEC_DEF_VEC({m}, {ce}, {dn})")
+            # The Vec descriptor only stores a T pointer, so it can be declared
+            # before T is complete. Its value-taking helpers are emitted later.
+            self.decls.append(f"typedef struct {{ {ce} *p; usize len; usize cap; }} {m};")
+            self.decls.append(f"static inline void {m}_drop({m} *v);")
             self.defined.add(m)
+            self.vec_impls.append(f"SEC_IMPL_VEC({m}, {ce}, {dn})")
         elif k == "option":
             self.decls.append(f"SEC_DEF_OPT({m}, {ce})")
             self.defined.add(m)
@@ -388,6 +403,8 @@ class Compiler:
                         self.enum_cnames[(it.name, variant)] = cname
                         enumerators.append(f"{cname} = {i}")
                     self.decls.append("enum { " + ", ".join(enumerators) + " };")
+        for name in self.structs:
+            self.decls.append(f"typedef struct T_{name} T_{name};")
         for name, info in self.structs.items():
             fields, fseen = [], set()
             for fname, tn, fp in info["node"].fields:
@@ -397,6 +414,12 @@ class Compiler:
                 fields.append((fname, self.storable(self.rty(tn, struct(name)), tn)))
             info["fields"] = fields
         self.check_cycles()
+        # Recursive heap-owned structs can have drop helpers that call Vec drops.
+        # Declare those helpers now so deferred container code may call them too.
+        for name in self.structs:
+            st = struct(name)
+            if self.needs_drop(st):
+                self.decls.append(f"static inline void drop_T_{name}(T_{name} *p);")
         for it in items:
             if it.k == "Const":
                 self.add_const(it)
