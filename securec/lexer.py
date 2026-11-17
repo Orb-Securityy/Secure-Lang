@@ -118,6 +118,8 @@ def lex(src):
                 except OverflowError as exc:
                     raise SecError("floating-point literal is out of range for f64", line, col) from exc
                 isf, suf = True, None
+            elif isf and suf is not None:
+                raise SecError("integer suffix cannot be applied to a floating-point literal", line, col)
             if isf and not math.isfinite(v):
                 raise SecError("floating-point literal is out of range for f64", line, col)
             if isf:
