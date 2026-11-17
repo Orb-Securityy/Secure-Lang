@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.8 — owned expression temporary tracking
+
+- Track every owned expression result, not only temporaries created while forming borrowed call arguments.
+- Transfer tracked ownership explicitly into locals, assignments, struct/array literals, Option/Result constructors, Vec elements, function arguments, and block/match results.
+- Ensure earlier owned arguments are dropped if a later call argument exits early through `?`; transfer them to the callee only once all arguments are successfully evaluated.
+- Add normal and ASan/LSan regressions for direct and wrapped owned arguments across both early-propagation and normal-call paths.
+
 ## 0.1.7 — recursive inline aggregate code generation
 
 - Forward-declare `Option<T>`, `Result<T, E>`, and fixed-array wrapper types when their inline payload references a struct currently being defined through a `Vec` or `Task` indirection.
