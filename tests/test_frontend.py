@@ -38,6 +38,17 @@ class FrontendRobustnessTests(unittest.TestCase):
                 with self.assertRaises(SecError):
                     lex(source)
 
+    def test_integer_suffixes_are_rejected_on_float_literals(self):
+        valid = ("1.5", "1.5f64", "1e3f64", "1f64")
+        invalid = ("1.5u8", "1e3i32", "1.2usize", "0.25u64")
+        for literal in valid:
+            with self.subTest(valid=literal):
+                lex(literal)
+        for literal in invalid:
+            with self.subTest(invalid=literal):
+                with self.assertRaisesRegex(SecError, "integer suffix cannot be applied"):
+                    lex(literal)
+
     def test_non_finite_f64_literals_are_source_errors(self):
         literals = ("1e999", "1e999f64", "9" * 400 + "f64")
         for literal in literals:
