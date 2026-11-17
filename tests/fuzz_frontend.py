@@ -4,6 +4,11 @@ Only source-level SecError exceptions are expected. Unexpected Python
 exceptions must escape so Atheris reports them as compiler bugs.
 """
 import sys
+from pathlib import Path
+
+# Running a script from tests/ puts that directory, not the repository root,
+# on sys.path. Add the project root so the package imports in CI and locally.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import atheris
 
