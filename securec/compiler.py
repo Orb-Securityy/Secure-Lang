@@ -702,6 +702,18 @@ class Compiler:
                 continue
             self.emit(self.drop_stmt(t.ty, t.lv))
 
+    def track_temp(self, ty, lv):
+        """Register every owned expression result for statement/exit cleanup."""
+        if not self.needs_drop(ty):
+            return lv
+        if not isinstance(lv, str) or not LVAL_RE.fullmatch(lv):
+            lv = self.tmp(self.ctype(ty), lv)
+        for t in reversed(self.stmt_temps):
+            if t.lv == lv and not t.taken:
+                return lv
+        self.stmt_temps.append(Tmp(ty, lv, len(self.scopes)))
+        return lv
+
     def take_temp(self, lv):
         """Transfer ownership out of a tracked expression temporary."""
         if not isinstance(lv, str) or not IDENT_RE.fullmatch(lv):
@@ -777,6 +789,8 @@ class Compiler:
             tc, tt = "SEC_UNIT", (NEVER if self.moved is None else UNIT)
         if dest and tt.k not in ("unit", "never"):
             self.emit(f"{dest} = {tc};")
+            if self.needs_drop(tt):
+                self.take_temp(tc)
         self.drop_temps(mark)
         if self.moved is not None:
             self.drop_scope(self.scopes[-1])
@@ -794,6 +808,7 @@ class Compiler:
                 self.err("unused `Result`: handle it with `match`, `?` or `unwrap()` (errors must not be ignored)", s.e)
             if t.k not in ("unit", "never") and self.needs_drop(t):
                 self.emit(self.drop_stmt(t, c))
+                self.take_temp(c)
         self.drop_temps(mark)
 
     def s_let(self, s):
@@ -807,6 +822,8 @@ class Compiler:
             self.err("cannot bind a unit `()` value to a variable", s)
         v = self.declare(s.name, ann or t, s.mut)
         self.decl_var(v, c)
+        if self.needs_drop(t):
+            self.take_temp(c)
 
     def value_block(self, n, expected):
         dest = f"_r{self.newid()}"
@@ -891,8 +908,11 @@ class Compiler:
             c = self.tmp(self.ctype(t), c)
         tm = None
         if self.needs_drop(t):
-            tm = Tmp(t, c, len(self.scopes))
-            self.stmt_temps.append(tm)
+            tm = next((item for item in reversed(self.stmt_temps)
+                       if item.lv == c and not item.taken), None)
+            if tm is None:
+                tm = Tmp(t, c, len(self.scopes))
+                self.stmt_temps.append(tm)
         return Place(c, t, True, None, None, tm)
 
     def pointee(self, v, n):
@@ -1008,6 +1028,8 @@ class Compiler:
                      "returned or used as values", n)
         if t.k == "never":
             self.moved = None
+        else:
+            c = self.track_temp(t, c)
         return c, t
 
     def e_Int(self, n, expected, allow_ref):
@@ -1241,6 +1263,8 @@ class Compiler:
                 if v.flag:
                     self.emit(f"if ({v.flag}) {self.drop_stmt(ty, lv)}")
                 self.emit(f"{lv} = {rc};")
+                if self.needs_drop(ty):
+                    self.take_temp(rc)
                 if v.flag:
                     self.emit(f"{v.flag} = true;")
                     if self.moved is not None:
@@ -1260,6 +1284,8 @@ class Compiler:
                 if self.needs_drop(ty):
                     self.emit(self.drop_stmt(ty, lv))
                 self.emit(f"{lv} = {rc};")
+                if self.needs_drop(ty):
+                    self.take_temp(rc)
                 return "SEC_UNIT", UNIT
         cur = self.tmp(self.ctype(ty), lv)
         if op in ("<<", ">>") and ty.k == "int":
@@ -1473,7 +1499,7 @@ class Compiler:
             self.drops_down_to(0)
             self.emit("return;")
         else:
-            r = c if IDENT_RE.fullmatch(c) and c.startswith("_t") else self.tmp(self.ctype(rt), c)
+            r = c if LVAL_RE.fullmatch(c) else self.tmp(self.ctype(rt), c)
             keep = (r,) if self.needs_drop(rt) else ()
             self.drop_temps_on_exit(keep=keep)
             self.drops_down_to(0)
@@ -1522,6 +1548,10 @@ class Compiler:
         if not n.arms:
             self.err("`match` needs at least one arm", n)
         s = sc if IDENT_RE.fullmatch(sc) else self.tmp(self.ctype(st), sc)
+        if self.needs_drop(st):
+            # Each arm either moves the active payload into a binding or drops it
+            # in its pattern prelude; do not drop the containing Option/Result again.
+            self.take_temp(s)
         L = self.loc(n)
         s0 = self.snap()
         dest = f"_r{self.newid()}"
@@ -1634,7 +1664,11 @@ class Compiler:
         st = struct(nm)
         ct = self.ctype(st)
         init = ", ".join(f".f_{f} = {vals[f]}" for f, _ in info["fields"]) or "0"
-        return self.tmp(ct, f"({ct}){{{init}}}"), st
+        result = self.tmp(ct, f"({ct}){{{init}}}")
+        for fname, field_ty in info["fields"]:
+            if self.needs_drop(field_ty):
+                self.take_temp(vals[fname])
+        return result, st
 
     def array_type(self, el, cnt, n):
         el = self.storable(el, n)
@@ -1656,7 +1690,11 @@ class Compiler:
             cs.append(c)
         at = self.array_type(el, len(cs), n)
         ct = self.ctype(at)
-        return self.tmp(ct, f"({ct}){{{{ {', '.join(cs)} }}}}"), at
+        result = self.tmp(ct, f"({ct}){{{{ {', '.join(cs)} }}}}")
+        if self.needs_drop(el):
+            for item in cs:
+                self.take_temp(item)
+        return result, at
 
     def e_ArrayRep(self, n, expected, allow_ref):
         el = expected.args[0] if expected is not None and expected.k == "array" else None
@@ -1809,6 +1847,12 @@ class Compiler:
             if pt.k == "ref":
                 cs[i] = self.form_ref(a, pt, ents)
         self.check_conflicts(ents, n)
+        # Only now is the call guaranteed to execute: if a later argument
+        # returned early, all previously created owned temporaries remain live
+        # in stmt_temps and are cleaned by that exit path.
+        for c, (_, _, pt) in zip(cs, params):
+            if pt.k != "ref" and self.needs_drop(pt):
+                self.take_temp(c)
         return cs
 
     def emit_call(self, sig, cs, n):
@@ -1850,7 +1894,10 @@ class Compiler:
                 return None, t
             ot = option(self.storable(t, n))
             ct = self.ctype(ot)
-            return self.tmp(ct, f"({ct}){{.some = true, .v = {c}}}"), ot
+            result = self.tmp(ct, f"({ct}){{.some = true, .v = {c}}}")
+            if self.needs_drop(t):
+                self.take_temp(c)
+            return result, ot
         if expected is None or expected.k != "result":
             self.err(f"cannot infer the `Result` type of `{nm}(...)`; add a type annotation or return it directly", n)
         want = expected.args[0 if nm == "Ok" else 1]
@@ -1860,7 +1907,10 @@ class Compiler:
         if t != want:
             self.err(f"mismatched types in `{nm}(...)`: expected `{tstr(want)}`, found `{tstr(t)}`", n.args[0])
         ct = self.ctype(expected)
-        return self.tmp(ct, f"({ct}){{.ok = {'true' if nm == 'Ok' else 'false'}, .{'v' if nm == 'Ok' else 'e'} = {c}}}"), expected
+        result = self.tmp(ct, f"({ct}){{.ok = {'true' if nm == 'Ok' else 'false'}, .{'v' if nm == 'Ok' else 'e'} = {c}}}")
+        if self.needs_drop(want):
+            self.take_temp(c)
+        return result, expected
 
     def path_call(self, n, f, expected):
         if len(f.segs) != 2:
@@ -1975,6 +2025,8 @@ class Compiler:
                 pl = self.place_(recv)
                 need_mut(pl)
                 self.emit(f"{m}_push(&{pl.lv}, {c});")
+                if self.needs_drop(el):
+                    self.take_temp(c)
                 return "SEC_UNIT", UNIT
             if name == "pop":
                 noargs()
@@ -2047,6 +2099,7 @@ class Compiler:
                 r = self.tmp(self.ctype(el), f"{c}.some ? {c}.v : {dc}")
                 if self.needs_drop(el):
                     self.emit(f"if ({c}.some) {self.drop_stmt(el, dc)}")
+                    self.take_temp(dc)
                 return (r, el)
         if k == "result":
             el = t.args[0]
@@ -2071,6 +2124,7 @@ class Compiler:
                     self.emit(f"if (!{c}.ok) {self.drop_stmt(t.args[1], c + '.e')}")
                 if self.needs_drop(el):
                     self.emit(f"if ({c}.ok) {self.drop_stmt(el, dc)}")
+                    self.take_temp(dc)
                 return r, el
         if k == "task" and name == "join":
             noargs()

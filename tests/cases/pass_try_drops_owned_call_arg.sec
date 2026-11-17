@@ -1,0 +1,24 @@
+// EXPECT-EXIT: 0
+fn fail_arg(should_fail: bool) -> Result<i32, i32> {
+    if should_fail { Err(7) } else { Ok(9) }
+}
+
+fn consume(value: String, number: i32) -> i32 {
+    return number;
+}
+
+fn work(should_fail: bool) -> Result<i32, i32> {
+    Ok(consume(String::from("temporary-owned-argument"), fail_arg(should_fail)?))
+}
+
+fn main() -> i32 {
+    match work(true) {
+        Ok(_) => { return 1; },
+        Err(_) => {},
+    }
+    match work(false) {
+        Ok(value) => { if value == 9 { return 0; } },
+        Err(_) => { return 2; },
+    }
+    return 3;
+}
