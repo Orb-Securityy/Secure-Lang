@@ -1,0 +1,14 @@
+// EXPECT-EXIT: 1
+struct A {
+    children: Vec<B>,
+}
+
+struct B {
+    parent: Option<A>,
+}
+
+fn main() -> i32 {
+    let mut a = A { children: Vec::new() };
+    a.children.push(B { parent: None });
+    return a.children.len() as i32;
+}
