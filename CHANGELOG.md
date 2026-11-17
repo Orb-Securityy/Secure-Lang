@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.15 — terminal-safe diagnostics
+
+- Escape terminal control and Unicode format characters in compiler diagnostics, including source excerpts, error messages, filenames, and native compiler output.
+- Preserve diagnostic line breaks while escaping other control characters in external compiler output.
+- Recalculate the source caret position after escaping the displayed source prefix.
+- Add regressions for ANSI escape sequences and bidirectional formatting controls in source text, messages, and filenames.
+
 ## Test harness — deterministic standard input
 
 - Add `EXPECT-IN:` directives to executable conformance cases so tests can feed exact lines to stdin, including empty lines and leading/trailing spaces.
