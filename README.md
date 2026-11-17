@@ -1,4 +1,4 @@
-# Secure — a security-first systems language (v0.1.8, bootstrap)
+# Secure — a security-first systems language (v0.1.9, bootstrap)
 
 **Orb Security · Orb Corporation · Proprietary & confidential**
 
@@ -8,7 +8,7 @@ null dereference, uninitialized reads, silent numeric conversion, ignored errors
 
 This repository is the **bootstrap toolchain**: `securec`, a compiler written in Python (a memory-safe host)
 that type-checks, ownership-checks and lowers Secure to hardened C11, then to a native PIE binary via `gcc`.
-It is a working, tested v0.1.8 expression-temporary ownership cleanup update — not a finished production system. Read `docs/SECURITY.md` for exactly what is
+It is a working, tested v0.1.9 non-ASCII lexer diagnostic update — not a finished production system. Read `docs/SECURITY.md` for exactly what is
 and is not guaranteed.
 
 ```
