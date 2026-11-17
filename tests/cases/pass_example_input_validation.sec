@@ -15,7 +15,6 @@
 // Reads untrusted integers from stdin, one per line. Empty lines, malformed values,
 // whitespace, and values outside the i64 range must be rejected without crashing.
 // total uses checked arithmetic, so hostile input can never wrap around or corrupt memory.
-// total uses checked arithmetic, so hostile input can never wrap around or corrupt memory.
 enum Verdict { Accepted, Rejected, Overflow }
 
 fn classify(line: &str, total: &mut i64) -> Verdict {
