@@ -129,6 +129,46 @@ class DriverInputTests(unittest.TestCase):
             with open(path, encoding="utf-8") as stream:
                 self.assertEqual(stream.read(), source)
 
+    def test_build_rejects_symlink_output_alias_to_source(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "program.sec")
+            alias = os.path.join(td, "program-link")
+            source = "fn main() -> i32 { return 0; }"
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write(source)
+            os.symlink(path, alias)
+
+            stderr = io.StringIO()
+            with patch("securec.driver.cc_build") as build:
+                with contextlib.redirect_stderr(stderr):
+                    result = main(["build", path, "-o", alias])
+
+            self.assertEqual(result, 2)
+            self.assertFalse(build.called)
+            self.assertIn("output path must differ from the source file", stderr.getvalue())
+            with open(path, encoding="utf-8") as stream:
+                self.assertEqual(stream.read(), source)
+
+    def test_build_rejects_hardlink_output_alias_to_source(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "program.sec")
+            alias = os.path.join(td, "program-hardlink")
+            source = "fn main() -> i32 { return 0; }"
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write(source)
+            os.link(path, alias)
+
+            stderr = io.StringIO()
+            with patch("securec.driver.cc_build") as build:
+                with contextlib.redirect_stderr(stderr):
+                    result = main(["build", path, "-o", alias])
+
+            self.assertEqual(result, 2)
+            self.assertFalse(build.called)
+            self.assertIn("output path must differ from the source file", stderr.getvalue())
+            with open(path, encoding="utf-8") as stream:
+                self.assertEqual(stream.read(), source)
+
     def test_run_temp_directory_failure_is_reported_without_traceback(self):
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "program.sec")
