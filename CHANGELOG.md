@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.16 — numeric separator validation
+
+- Require `_` separators to appear strictly between digits in decimal, fractional, exponent, hexadecimal, and binary literals.
+- Reject trailing and repeated separators instead of silently removing them (for example, `1__2` must not be interpreted as `12`).
+- Reject incomplete hexadecimal and binary prefixes as malformed numeric literals.
+- Add frontend and conformance regressions for valid and invalid separator placement.
+
 ## 0.1.15 — terminal-safe diagnostics
 
 - Escape terminal control and Unicode format characters in compiler diagnostics, including source excerpts, error messages, filenames, and native compiler output.
