@@ -29,14 +29,14 @@ class SanitizerDiagnosticTests(unittest.TestCase):
         self.assertTrue(stdout_matches("", []))
 
     def test_stdin_serialization_preserves_empty_and_spaced_lines(self):
-        self.assertEqual(input_text(["first", "", "  spaced ", "last"]), "first\\n\\n  spaced \\nlast\\n")
+        self.assertEqual(input_text(["first", "", "  spaced ", "last"]), "first\n\n  spaced \nlast\n")
         self.assertEqual(input_text([]), "")
 
     def test_expect_in_headers_preserve_empty_and_spaced_input(self):
         import os
         import tempfile
 
-        source = "// EXPECT-IN: first\\n// EXPECT-IN:\\n// EXPECT-IN:  two spaces \\nfn main() {}\\n"
+        source = "// EXPECT-IN: first\n// EXPECT-IN:\n// EXPECT-IN:  two spaces \nfn main() {}\n"
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as stream:
             stream.write(source)
             path = stream.name
