@@ -522,15 +522,17 @@ class Compiler:
                 self.emit(self.drop_stmt(t.ty, t.lv))
         del self.stmt_temps[mark:]
 
-    def drop_temps_on_exit(self, deeper_than=None):
+    def drop_temps_on_exit(self, deeper_than=None, keep=()):
         """Emit cleanup for live expression temporaries on an abrupt control-flow path.
 
         Unlike drop_temps(), this does not mutate the compile-time list: sibling
         branches and the normal path still need their own cleanup code.
         When leaving a loop, only temporaries created inside that loop are dropped.
+        Values transferred by this exit path can be kept without affecting sibling paths.
         """
+        keep = set(keep)
         for t in reversed(self.stmt_temps):
-            if t.taken:
+            if t.taken or t.lv in keep:
                 continue
             if deeper_than is not None and t.scope_depth <= deeper_than:
                 continue
@@ -1292,9 +1294,8 @@ class Compiler:
             self.emit("return;")
         else:
             r = c if IDENT_RE.fullmatch(c) and c.startswith("_t") else self.tmp(self.ctype(rt), c)
-            if self.needs_drop(rt):
-                self.take_temp(r)
-            self.drop_temps_on_exit()
+            keep = (r,) if self.needs_drop(rt) else ()
+            self.drop_temps_on_exit(keep=keep)
             self.drops_down_to(0)
             self.emit(f"return {r};")
         return None, NEVER
