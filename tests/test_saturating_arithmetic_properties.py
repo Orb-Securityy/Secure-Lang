@@ -86,7 +86,7 @@ class SaturatingArithmeticProperties(unittest.TestCase):
             build = subprocess.run(
                 [
                     "gcc", "-std=gnu11", "-Wall", "-Wextra", "-Werror",
-                    "-Wno-unused-function", "-I", str(ROOT / "securec"),
+                    "-Wno-unused-function", "-Wno-type-limits", "-I", str(ROOT / "securec"),
                     str(source), "-o", str(executable),
                 ],
                 capture_output=True,
