@@ -1,0 +1,9 @@
+struct Boxed {
+    value: String,
+}
+fn main() -> i32 {
+    let item = Boxed { value: String::from("secure") };
+    let moved = item;
+    println(moved.value);
+    return 0;
+}
