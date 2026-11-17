@@ -75,6 +75,7 @@ class Compiler:
     def __init__(self, src, filename, forbid_unsafe=False):
         self.src, self.file, self.forbid_unsafe = src, os.path.basename(filename), forbid_unsafe
         self.structs, self.enums, self.fns, self.methods, self.consts = {}, {}, {}, {}, {}
+        self.enum_cnames = {}
         self.decls, self.protos, self.thunks, self.bodies = [], [], [], []
         self.defined, self.inprog, self.spawned = {"Slice_u8", "Vec_u8"}, set(), set()
         self.audit = {"unsafe_blocks": [], "unsafe_fns": [], "extern_fns": []}
@@ -102,7 +103,9 @@ class Compiler:
         return self.tmp(self.ctype(t), "{0}")
 
     def loc(self, n):
-        return f'"{self.file}:{n.line}:{n.col}"'
+        # File names are user-controlled filesystem data, not trusted C source.
+        filename = c_str(os.fsencode(self.file))
+        return f'"{filename}:{n.line}:{n.col}"'
 
     # ------------------------------------------------------------- type layer
     def storable(self, t, n):
@@ -358,7 +361,13 @@ class Compiler:
                         self.err("enums need at least one variant and no duplicates", it)
                     self.enums[it.name] = it.variants
                     self.decls.append(f"typedef i32 T_{it.name};")
-                    self.decls.append("enum { " + ", ".join(f"T_{it.name}_{v} = {i}" for i, v in enumerate(it.variants)) + " };")
+                    enumerators = []
+                    for i, variant in enumerate(it.variants):
+                        # C enumerators share one global ordinary-identifier namespace.
+                        cname = f"SEC_ENUM_{len(self.enum_cnames)}"
+                        self.enum_cnames[(it.name, variant)] = cname
+                        enumerators.append(f"{cname} = {i}")
+                    self.decls.append("enum { " + ", ".join(enumerators) + " };")
         for name, info in self.structs.items():
             fields, fseen = [], set()
             for fname, tn, fp in info["node"].fields:
@@ -449,7 +458,8 @@ class Compiler:
             key = (selfty.name, n.name)
             if key in self.methods:
                 self.err(f"duplicate method `{n.name}`", n)
-            cname = f"m_{selfty.name}_{n.name}"
+            # Length-prefix both components; plain underscore joining is ambiguous.
+            cname = f"m_{len(selfty.name)}_{selfty.name}_{len(n.name)}_{n.name}"
         else:
             cname = f"f_{n.name}"
         sig = Sig(n.name, params, ret, cname, n, n.unsafe, n.extern, selfty)
@@ -882,7 +892,7 @@ class Compiler:
             if a in self.enums:
                 if b not in self.enums[a]:
                     self.err(f"enum `{a}` has no variant `{b}`", n)
-                return f"T_{a}_{b}", enum(a)
+                return self.enum_cnames[(a, b)], enum(a)
             if a in INTS and b in ("MAX", "MIN"):
                 lo, hi = int_range(a)
                 return c_int(hi if b == "MAX" else lo, a), I(a)
@@ -1412,7 +1422,7 @@ class Compiler:
                 e(f"pattern `{p[2]}::{p[3]}` does not match a value of type `{tstr(st)}`")
             if p[3] not in self.enums[p[2]]:
                 e(f"enum `{p[2]}` has no variant `{p[3]}`")
-            return f"{s} == T_{p[2]}_{p[3]}", [], [], ("v", p[3])
+            return f"{s} == {self.enum_cnames[(p[2], p[3]) ]}", [], [], ("v", p[3])
         name, sub = p[2], p[3]
         if st.k == "option" and name == "Some":
             cond, pty, init = f"{s}.some", st.args[0], f"{s}.v"
