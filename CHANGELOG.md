@@ -1,5 +1,12 @@
 # Changelog
 
+## Test harness — deterministic standard input
+
+- Add `EXPECT-IN:` directives to executable conformance cases so tests can feed exact lines to stdin, including empty lines and leading/trailing spaces.
+- Pass supplied input through `subprocess.run(input=...)` rather than always closing stdin with `/dev/null`.
+- Exercise `read_line` and `parse_i64` with i64 minimum/maximum, numeric overflow, accumulator overflow, explicit plus, malformed signs, empty lines, whitespace, and trailing junk.
+- Add unit tests for stdin header parsing and serialization.
+
 ## 0.1.12 — source file input diagnostics
 
 - Convert invalid UTF-8 source files into a clear CLI diagnostic instead of leaking `UnicodeDecodeError` tracebacks.
