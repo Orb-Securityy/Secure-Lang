@@ -807,6 +807,21 @@ class Compiler:
         if self.unsafe_depth == 0:
             self.err(f"{what} requires an `unsafe` block", n)
 
+    def contains_raw_pointer(self, t, seen=None):
+        """Inspect aggregate fields as well as generic type arguments."""
+        if t.k == "ptr":
+            return True
+        seen = set() if seen is None else seen
+        if t.k == "struct":
+            if t.name in seen:
+                return False
+            next_seen = seen | {t.name}
+            return any(
+                self.contains_raw_pointer(field_ty, next_seen)
+                for _, field_ty in self.structs[t.name]["fields"]
+            )
+        return any(self.contains_raw_pointer(arg, seen) for arg in t.args)
+
     def consume(self, pl, n):
         t = pl.ty
         if t.k == "slice":
@@ -2035,9 +2050,9 @@ class Compiler:
             self.err("`spawn` expects a function name followed by its arguments: `spawn(work, a, b)`", n)
         sig = self.fns[a0.name]
         for _, _, pt in sig.params:
-            if pt.k == "ref" or has_ptr(pt):
+            if pt.k == "ref" or self.contains_raw_pointer(pt):
                 self.err("a spawned function may only take owned, thread-safe values: no references or raw pointers", n)
-        if sig.unsafe or has_ptr(sig.ret):
+        if sig.unsafe or self.contains_raw_pointer(sig.ret):
             self.err("a spawned function must be safe and must not return raw pointers", n)
         cs = self.lower_args(sig.params, n.args[1:], n)
         R = sig.ret
