@@ -1,0 +1,23 @@
+// EXPECT-OUT: 15 9 20
+// EXPECT-OUT: 1 2 3 4 5
+// EXPECT-OUT: 5 4 3 2 1
+// EXPECT-OUT: 0 0 0 7
+fn sum(xs: &[i32]) -> i32 { let mut s = 0; for i in 0..xs.len() { s += xs[i]; } s }
+fn fill(xs: &mut [i32], v: i32) { for i in 0..xs.len() { xs[i] = v; } }
+fn rev(xs: &mut [i32]) {
+    let n = xs.len();
+    for i in 0..n / 2 { xs.swap(i, n - 1 - i); }
+}
+fn show(xs: &[i32]) { for i in 0..xs.len() { if i > 0 { print(" "); } print(xs[i]); } println(); }
+fn main() -> i32 {
+    let mut a = [1, 2, 3, 4, 5];
+    println(sum(&a), " ", sum(&a[1..4]), " ", sum(&a[..]) + 5);
+    show(&a);
+    rev(&mut a);
+    show(&a);
+    let mut z = [9; 4];
+    fill(&mut z[..3], 0);
+    z[3] = 7;
+    show(&z);
+    return 0;
+}

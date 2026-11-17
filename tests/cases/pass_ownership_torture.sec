@@ -1,0 +1,79 @@
+// EXPECT-OUT: early 6
+// EXPECT-OUT: try-path err
+// EXPECT-OUT: temp 5 reassign 4 field 2
+// EXPECT-OUT: matched owned: payload
+// EXPECT-OUT: nested 3 6
+// EXPECT-OUT: unjoined ok
+struct Holder { name: String, items: Vec<String> }
+struct Pair { a: String, b: Vec<i32> }
+
+fn early(flag: bool) -> usize {
+    let a = String::from("one");
+    let b = String::from("two");
+    let c = String::from("three");
+    if flag { return a.len(); }
+    b.len() + c.len()
+}
+fn may_fail(ok: bool) -> Result<String, i32> {
+    let tmp = String::from("temp");
+    if !ok { return Err(1); }
+    Ok(tmp)
+}
+fn chain(ok: bool) -> Result<usize, i32> {
+    let own = String::from("owned local");
+    let s = may_fail(ok)?;
+    Ok(s.len() + own.len())
+}
+fn make() -> String { String::from("hello") }
+fn first(o: Option<String>) -> String {
+    match o { Some(s) => s, None => String::from("none") }
+}
+fn build(n: i32) -> Vec<Vec<i32>> {
+    let mut out: Vec<Vec<i32>> = Vec::new();
+    for i in 0..n {
+        let mut row: Vec<i32> = Vec::new();
+        for j in 0..=i { row.push(j); }
+        out.push(row);
+    }
+    out
+}
+fn slow(x: u64) -> String { let mut s = String::new(); for _i in 0..3 { s.push_str("z"); } s.push_str("ok"); let _ = x; s }
+fn main() -> i32 {
+    println("early ", early(true) + early(false) - 5);
+    match chain(false) { Ok(n) => println("n ", n), Err(_) => println("try-path err") }
+    match chain(true) { Ok(n) => print(""), Err(_) => print("") }
+    // temporaries, reassignment, field reassignment
+    let l = make().len();
+    let mut s = String::from("a");
+    s = String::from("abcd");
+    s = String::from("wxyz");
+    let mut h = Holder { name: String::from("n"), items: Vec::new() };
+    h.items.push(String::from("i1"));
+    h.items.push(String::from("i2"));
+    h.name = String::from("renamed");
+    h.items = Vec::new();
+    h.items.push(String::from("x"));
+    h.items.push(String::from("y"));
+    println("temp ", l, " reassign ", s.len(), " field ", h.items.len());
+    let o: Option<String> = Some(String::from("payload"));
+    let g = first(o);
+    println("matched owned: ", g);
+    let o2: Option<String> = None;
+    let _g2 = first(o2);
+    let rows = build(3);
+    println("nested ", rows.len(), " ", rows[0].len() + rows[1].len() + rows[2].len());
+    let p = Pair { a: String::from("pa"), b: build(2).pop().unwrap_or(Vec::new()) };
+    let _unused = p;
+    // spawned work dropped without join
+    let t = spawn(slow, 1);
+    let _ = t;
+    println("unjoined ok");
+    let mut i = 0;
+    while i < 3 {
+        let inner = String::from("loop-local");
+        if i == 1 { i += 1; continue; }
+        let _k = inner.len();
+        i += 1;
+    }
+    return 0;
+}

@@ -1,0 +1,3 @@
+// EXPECT-PANIC: called `unwrap()` on an `Err`
+fn f() -> Result<i32, i32> { Err(3) }
+fn main() -> i32 { return f().unwrap(); }

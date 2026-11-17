@@ -1,0 +1,2 @@
+// EXPECT-ERR: only allowed as a direct call argument
+fn main() -> i32 { let v = [1, 2]; let r = &v; return 0; }

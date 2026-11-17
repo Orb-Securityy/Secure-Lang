@@ -1,0 +1,2 @@
+// EXPECT-ERR: cannot infer the element type
+fn main() -> i32 { let v = Vec::new(); return 0; }

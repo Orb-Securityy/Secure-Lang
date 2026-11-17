@@ -1,0 +1,2 @@
+// EXPECT-ERR: mismatched types
+fn main() -> i32 { let a: i32 = 1; let b: i64 = 2; let c = a + b; return 0; }

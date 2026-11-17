@@ -1,0 +1,25 @@
+// EXPECT-OUT: moved-in-branch 5
+// EXPECT-OUT: reinit 3
+// EXPECT-OUT: loop-break 2
+// EXPECT-OUT: shadow 5 7
+fn take(s: String) -> usize { s.len() }
+fn main() -> i32 {
+    let mut s = String::from("hello");
+    let c = 3;
+    if c > 2 { let n = take(s); println("moved-in-branch ", n); s = String::from("abc"); }
+    println("reinit ", s.len());
+    let t = String::from("x");
+    let mut i = 0;
+    loop {
+        i += 1;
+        if i == 2 { let _n = take(t); println("loop-break ", i); break; }
+    }
+    let a = 5;
+    let a = a + 2;
+    println("shadow 5 ", a);
+    let u = String::from("dropped-at-end");
+    let w = String::from("also");
+    let _ = u;
+    let _ = w;
+    return 0;
+}

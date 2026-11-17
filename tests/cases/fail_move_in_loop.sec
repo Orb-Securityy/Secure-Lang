@@ -1,0 +1,3 @@
+// EXPECT-ERR: moved inside a loop
+fn take(s: String) -> usize { s.len() }
+fn main() -> i32 { let s = String::from("a"); let mut i = 0; while i < 3 { take(s); i += 1; } return 0; }

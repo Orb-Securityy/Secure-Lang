@@ -1,0 +1,20 @@
+// EXPECT-OUT: 0 255 127 -128
+// EXPECT-OUT: none some 250 none
+// EXPECT-OUT: 4 2 8 1024
+// EXPECT-OUT: 200 44
+// EXPECT-OUT: true
+fn main() -> i32 {
+    let a: u8 = 250;
+    println(wrapping_add(a, 6u8), " ", saturating_add(a, 100u8), " ", saturating_add(100i8, 100i8), " ", saturating_sub(-100i8, 100i8));
+    match checked_add(a, 6u8) { Some(v) => print("some ", v), None => print("none") }
+    print(" ");
+    match checked_sub(a, 0u8) { Some(v) => print("some ", v), None => print("none") }
+    print(" ");
+    match checked_mul(a, 2u8) { Some(v) => println("some ", v), None => println("none") }
+    println(1 << 2, " ", 8 >> 2, " ", 2.pow(3) as i32 * 1, " ", 1u64 << 10);
+    let big: i32 = 300;
+    println(200u8 + 0, " ", big as wrapping u8);
+    let x: i64 = 5;
+    println(x as f64 > 4.5);
+    return 0;
+}

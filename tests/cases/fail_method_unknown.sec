@@ -1,0 +1,2 @@
+// EXPECT-ERR: no method `frobnicate`
+fn main() -> i32 { let v: Vec<i32> = Vec::new(); v.frobnicate(); return 0; }

@@ -1,0 +1,3 @@
+// EXPECT-PANIC: index out of bounds: the index is 7 but the length is 4
+fn id(x: usize) -> usize { x }
+fn main() -> i32 { let a = [1, 2, 3, 4]; return a[id(7)]; }

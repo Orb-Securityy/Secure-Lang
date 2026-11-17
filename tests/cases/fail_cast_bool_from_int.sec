@@ -1,0 +1,2 @@
+// EXPECT-ERR: cannot cast
+fn main() -> i32 { let x = 1; let b = x as bool; return 0; }

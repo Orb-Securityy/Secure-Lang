@@ -1,0 +1,3 @@
+// EXPECT-ERR: cannot assign to immutable variable `x`
+fn f(x: i32) -> i32 { x += 1; x }
+fn main() -> i32 { return f(1); }

@@ -1,0 +1,2 @@
+// EXPECT-ERR: array too large for the stack
+fn main() -> i32 { let a = [0u8; 2000000]; return a[0] as i32; }

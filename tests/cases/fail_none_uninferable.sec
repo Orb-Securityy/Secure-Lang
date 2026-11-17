@@ -1,0 +1,2 @@
+// EXPECT-ERR: cannot infer the type of `None`
+fn main() -> i32 { let x = None; return 0; }

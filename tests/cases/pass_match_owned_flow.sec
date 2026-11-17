@@ -1,0 +1,27 @@
+// EXPECT-OUT: got x
+// EXPECT-OUT: none-path
+// EXPECT-OUT: s=abc n=3
+// EXPECT-OUT: 9
+fn pick(v: &mut Vec<String>, i: usize) -> Option<String> {
+    if i >= v.len() { return None; }
+    v.pop()
+}
+fn len_or(o: Option<String>) -> usize { match o { Some(s) => s.len(), None => 0 } }
+fn main() -> i32 {
+    let mut v: Vec<String> = Vec::new();
+    v.push(String::from("abc"));
+    v.push(String::from("x"));
+    let r = pick(&mut v, 1);
+    match r { Some(s) => println("got ", s), None => println("none-path") }
+    let r2 = pick(&mut v, 5);
+    match r2 { Some(_) => println("bad"), None => println("none-path") }
+    let r3 = pick(&mut v, 0);
+    let n = len_or(r3);
+    let s = String::from("abc");
+    println("s=", s, " n=", n);
+    let mut total = 0;
+    let words: [i32; 3] = [2, 3, 4];
+    for i in 0..words.len() { total += words[i]; }
+    println(total);
+    return 0;
+}

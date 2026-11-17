@@ -1,0 +1,9 @@
+// EXPECT-PANIC: index out of bounds: the index is 0 but the length is 0
+fn id(x: usize) -> usize { x }
+fn main() -> i32 {
+    let mut v: Vec<i32> = Vec::new();
+    v.push(1);
+    // index operand empties the vector before the access: must PANIC (bounds), never read freed memory
+    let x = v[{ v.clear(); id(0) }];
+    return x;
+}

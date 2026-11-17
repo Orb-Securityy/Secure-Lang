@@ -1,0 +1,2 @@
+// EXPECT-ERR: index out of bounds: the length is 3 but the index is 5
+fn main() -> i32 { let a = [1, 2, 3]; return a[5]; }

@@ -1,0 +1,3 @@
+// EXPECT-ERR: expected 2 argument(s), found 1
+fn f(a: i32, b: i32) -> i32 { a + b }
+fn main() -> i32 { return f(1); }

@@ -1,0 +1,2 @@
+// EXPECT-ERR: cannot be compared directly
+fn main() -> i32 { let a = String::from("x"); let b = String::from("x"); if a == b { return 1; } return 0; }

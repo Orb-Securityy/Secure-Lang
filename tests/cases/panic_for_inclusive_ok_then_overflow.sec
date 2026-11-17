@@ -1,0 +1,2 @@
+// EXPECT-PANIC: integer overflow in addition
+fn main() -> i32 { let mut x: u8 = 250; for _i in 0..10 { x += 1; } return x as i32; }

@@ -1,0 +1,2 @@
+// EXPECT-ERR: out of range for `u8`
+fn main() -> i32 { let x: u8 = 256; return x as i32; }

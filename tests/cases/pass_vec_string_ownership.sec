@@ -1,0 +1,40 @@
+// EXPECT-OUT: 285 10 0
+// EXPECT-OUT: abcdef 6
+// EXPECT-OUT: 3 hello world
+// EXPECT-OUT: c
+// EXPECT-OUT: 100 4
+struct Named { name: String, scores: Vec<i32> }
+fn total(v: &Vec<i32>) -> i64 { let mut s: i64 = 0; for i in 0..v.len() { s += v[i] as i64; } s }
+fn make(n: i32) -> Vec<i32> {
+    let mut v: Vec<i32> = Vec::new();
+    for i in 0..n { v.push(i * i); }
+    v
+}
+fn consume(s: String) -> usize { s.len() }
+fn greet(n: Named) -> String {
+    let mut out = String::from("hello ");
+    out.push_str(n.name.as_str());
+    out
+}
+fn main() -> i32 {
+    let v = make(10);
+    println(total(&v), " ", v.len(), " ", 0 + 0);
+    let mut s = String::from("abc");
+    s.push_str("def");
+    let n = consume(s);
+    println("abcdef ", n);
+    let nm = Named { name: String::from("world"), scores: make(3) };
+    let k = nm.scores.len();
+    let g = greet(nm);
+    println(k, " ", g);
+    let mut vs: Vec<String> = Vec::new();
+    vs.push(String::from("a"));
+    vs.push(String::from("b"));
+    vs.push(String::from("c"));
+    let last = vs.pop();
+    match last { Some(x) => println(x), None => println("none") }
+    vs.clear();
+    let big = make(100);
+    println(big.len(), " ", 4);
+    return 0;
+}

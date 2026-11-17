@@ -1,0 +1,35 @@
+// EXPECT-OUT: ok 20
+// EXPECT-OUT: err -1
+// EXPECT-OUT: some 7 none
+// EXPECT-OUT: 5 9 true false
+// EXPECT-OUT: parsed 123 bad
+fn div(a: i32, b: i32) -> Result<i32, i32> {
+    if b == 0 { return Err(-1); }
+    Ok(a / b)
+}
+fn twice(a: i32, b: i32) -> Result<i32, i32> {
+    let q = div(a, b)?;
+    Ok(q * 2)
+}
+fn first_even(v: &[i32]) -> Option<i32> {
+    for i in 0..v.len() { if v[i] % 2 == 0 { return Some(v[i]); } }
+    None
+}
+fn plus_one(v: &[i32]) -> Option<i32> {
+    let x = first_even(v)?;
+    Some(x + 1)
+}
+fn main() -> i32 {
+    match twice(10, 1) { Ok(x) => println("ok ", x), Err(e) => println("err ", e) }
+    match twice(10, 0) { Ok(x) => println("ok ", x), Err(e) => println("err ", e) }
+    let arr = [1, 3, 6, 8];
+    match first_even(&arr) { Some(x) => print("some ", x + 1, " "), None => print("none ") }
+    let odd = [1, 3];
+    match plus_one(&odd) { Some(_) => println("some"), None => println("none") }
+    let o: Option<i32> = Some(5);
+    let none: Option<i32> = None;
+    println(o.unwrap_or(0), " ", none.unwrap_or(9), " ", o.is_some(), " ", none.is_some());
+    match parse_i64("123") { Some(v) => print("parsed ", v, " "), None => print("bad ") }
+    match parse_i64("12x") { Some(v) => println("parsed ", v), None => println("bad") }
+    return 0;
+}

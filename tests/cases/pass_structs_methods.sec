@@ -1,0 +1,32 @@
+// EXPECT-OUT: 9 5 13
+// EXPECT-OUT: 2 true
+// EXPECT-OUT: Green 7
+struct Point { x: i32, y: i32 }
+struct Rect { a: Point, b: Point }
+enum Color { Red, Green, Blue }
+impl Point {
+    fn new(x: i32, y: i32) -> Point { Point { x: x, y: y } }
+    fn manhattan(&self) -> i32 { self.x.abs() + self.y.abs() }
+    fn shift(&mut self, dx: i32, dy: i32) { self.x += dx; self.y += dy; }
+    fn add(self, o: Point) -> Point { Point::new(self.x + o.x, self.y + o.y) }
+}
+impl Rect {
+    fn width(&self) -> i32 { self.b.x - self.a.x }
+    fn grow(&mut self) { self.b.shift(1, 1); }
+}
+impl Color {
+    fn is_green(&self) -> bool { *self == Color::Green }
+}
+fn pick(c: Color) -> i32 { match c { Color::Red => 1, Color::Green => 2, Color::Blue => 3 } }
+fn main() -> i32 {
+    let mut p = Point::new(3, -4);
+    p.shift(2, 0);
+    let q = p.add(Point::new(0, 0));
+    println(p.manhattan() + 0, " ", q.x, " ", Point::new(6, 7).manhattan());
+    println(pick(Color::Green), " ", Color::Green.is_green());
+    let mut r = Rect { a: Point::new(0, 0), b: Point::new(5, 5) };
+    r.grow();
+    let name = match Color::Green { Color::Green => "Green", _ => "other" };
+    println(name, " ", r.width() + 1);
+    return 0;
+}

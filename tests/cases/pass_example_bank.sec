@@ -1,0 +1,47 @@
+// EXPECT-OUT: ok, balance 100
+// EXPECT-OUT: ok, balance 70
+// EXPECT-OUT: rejected: insufficient funds
+// EXPECT-OUT: rejected: zero amount
+// EXPECT-OUT: rejected: overflow
+// EXPECT-OUT: account 7 final 70
+// Typed state + explicit error handling: a tiny ledger where every failure is a value, not an exception.
+enum TxError { Insufficient, Overflow, ZeroAmount }
+struct Account { id: u32, balance: u64 }
+
+impl Account {
+    fn open(id: u32) -> Account { Account { id: id, balance: 0 } }
+    fn deposit(&mut self, amt: u64) -> Result<u64, TxError> {
+        if amt == 0 { return Err(TxError::ZeroAmount); }
+        match checked_add(self.balance, amt) {
+            Some(b) => { self.balance = b; Ok(b) }
+            None => Err(TxError::Overflow),
+        }
+    }
+    fn withdraw(&mut self, amt: u64) -> Result<u64, TxError> {
+        if amt == 0 { return Err(TxError::ZeroAmount); }
+        match checked_sub(self.balance, amt) {
+            Some(b) => { self.balance = b; Ok(b) }
+            None => Err(TxError::Insufficient),
+        }
+    }
+}
+fn report(r: Result<u64, TxError>) {
+    match r {
+        Ok(b) => println("ok, balance ", b),
+        Err(e) => match e {
+            TxError::Insufficient => println("rejected: insufficient funds"),
+            TxError::Overflow => println("rejected: overflow"),
+            TxError::ZeroAmount => println("rejected: zero amount"),
+        },
+    }
+}
+fn main() -> i32 {
+    let mut acct = Account::open(7);
+    report(acct.deposit(100));
+    report(acct.withdraw(30));
+    report(acct.withdraw(500));
+    report(acct.deposit(0));
+    report(acct.deposit(u64::MAX));
+    println("account ", acct.id, " final ", acct.balance);
+    return 0;
+}

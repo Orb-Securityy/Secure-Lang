@@ -1,0 +1,8 @@
+// EXPECT-PANIC: integer overflow in subtraction
+fn boom(n: u64) -> u64 { let a: u64 = 0; let c = n; return a - c; }
+fn main() -> i32 {
+    let t = spawn(boom, 1);
+    let r = t.join();
+    println("unreachable ", r);
+    return 0;
+}

@@ -1,0 +1,3 @@
+// EXPECT-ERR: use of moved value `s`
+fn take(s: String) -> usize { s.len() }
+fn main() -> i32 { let s = String::from("a"); let n = take(s); println(s, n); return 0; }

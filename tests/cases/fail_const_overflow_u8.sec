@@ -1,0 +1,2 @@
+// EXPECT-ERR: arithmetic overflow in constant expression
+fn main() -> i32 { let x: u8 = 255u8 + 1u8; return x as i32; }

@@ -1,0 +1,4 @@
+// EXPECT-ERR: forbidden by --forbid-unsafe
+// FLAGS: --forbid-unsafe
+extern fn abs(x: i32) -> i32;
+fn main() -> i32 { return unsafe { abs(-1) }; }

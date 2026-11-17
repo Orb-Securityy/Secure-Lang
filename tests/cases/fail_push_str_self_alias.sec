@@ -1,0 +1,2 @@
+// EXPECT-ERR: conflicting access to `s`
+fn main() -> i32 { let mut s = String::from("ab"); s.push_str(s.as_str()); return 0; }

@@ -1,0 +1,17 @@
+// EXPECT-OUT: true false true
+// EXPECT-OUT: 0 0 0
+// EXPECT-OUT: eq neq 3
+fn same(a: &str, b: &str) -> bool { str_eq(a, b) }
+fn main() -> i32 {
+    let pw = String::from("hunter2");
+    let guess = String::from("hunter2");
+    let wrong = String::from("hunter3");
+    println(ct_eq(&pw, &guess), " ", ct_eq(&pw, &wrong), " ", ct_eq(&pw, &pw));
+    let mut secret = [7u8, 7u8, 7u8];
+    zeroize(&mut secret);
+    println(secret[0], " ", secret[1], " ", secret[2]);
+    if same("abc", "abc") { print("eq "); }
+    if !same("abc", "abd") { print("neq "); }
+    println(pw.len() - 4);
+    return 0;
+}

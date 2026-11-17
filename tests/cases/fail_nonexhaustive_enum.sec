@@ -1,0 +1,3 @@
+// EXPECT-ERR: non-exhaustive
+enum C { A, B, C }
+fn main() -> i32 { let c = C::A; match c { C::A => 1, C::B => 2 } }

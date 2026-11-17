@@ -1,0 +1,19 @@
+// EXPECT-OUT: 499999500000 499999500000
+// EXPECT-OUT: joined 3 results: 6 18 27
+fn range_sum(lo: u64, hi: u64) -> u64 { let mut s: u64 = 0; for i in lo..hi { s += i; } s }
+fn count(v: Vec<i32>) -> i32 { let mut s = 0; for i in 0..v.len() { s += v[i]; } s }
+fn main() -> i32 {
+    let a = spawn(range_sum, 0, 500000);
+    let b = spawn(range_sum, 500000, 1000000);
+    let total = a.join() + b.join();
+    println(total, " ", range_sum(0, 1000000));
+    let mut v1: Vec<i32> = Vec::new();
+    let mut v2: Vec<i32> = Vec::new();
+    let mut v3: Vec<i32> = Vec::new();
+    for i in 1..4 { v1.push(i); v2.push(i + 4); v3.push(i + 7); }
+    let t1 = spawn(count, v1);
+    let t2 = spawn(count, v2);
+    let t3 = spawn(count, v3);
+    println("joined 3 results: ", t1.join(), " ", t2.join(), " ", t3.join());
+    return 0;
+}

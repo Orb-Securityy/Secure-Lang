@@ -1,0 +1,2 @@
+// EXPECT-ERR: unknown variable `nope`
+fn main() -> i32 { return nope; }

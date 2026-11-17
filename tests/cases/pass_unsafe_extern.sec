@@ -1,0 +1,10 @@
+// EXPECT-OUT: 5 true
+extern fn abs(x: i32) -> i32;
+unsafe fn raw_first(p: *const u8) -> u8 { *p }
+fn main() -> i32 {
+    let v = unsafe { abs(-5) };
+    let s = String::from("A");
+    let first = unsafe { raw_first(s.as_ptr()) };
+    println(v, " ", first == 'A');
+    return 0;
+}

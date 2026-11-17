@@ -1,0 +1,35 @@
+// EXPECT-OUT: accepted=0 rejected=0 total=0
+// Reads untrusted integers from stdin, one per line. Invalid lines are rejected, and the running
+// total uses checked arithmetic, so hostile input can never wrap around or corrupt memory.
+enum Verdict { Accepted, Rejected, Overflow }
+
+fn classify(line: &str, total: &mut i64) -> Verdict {
+    match parse_i64(line) {
+        None => Verdict::Rejected,
+        Some(v) => match checked_add(*total, v) {
+            None => Verdict::Overflow,
+            Some(t) => { *total = t; Verdict::Accepted }
+        },
+    }
+}
+
+fn main() -> i32 {
+    let mut total: i64 = 0;
+    let mut accepted = 0;
+    let mut rejected = 0;
+    loop {
+        let line = read_line();
+        match line {
+            None => break,
+            Some(s) => {
+                match classify(s.as_str(), &mut total) {
+                    Verdict::Accepted => { accepted += 1; }
+                    Verdict::Rejected => { rejected += 1; }
+                    Verdict::Overflow => { println("overflow detected: input ignored"); rejected += 1; }
+                }
+            }
+        }
+    }
+    println("accepted=", accepted, " rejected=", rejected, " total=", total);
+    return 0;
+}

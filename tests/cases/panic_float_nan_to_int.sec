@@ -1,0 +1,3 @@
+// EXPECT-PANIC: float to integer conversion
+fn id(x: f64) -> f64 { x }
+fn main() -> i32 { let z = id(0.0); let n = z / z; return n as i32; }

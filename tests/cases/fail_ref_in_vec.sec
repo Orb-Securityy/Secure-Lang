@@ -1,0 +1,2 @@
+// EXPECT-ERR: references are second-class
+fn main() -> i32 { let v: Vec<&i32> = Vec::new(); return 0; }

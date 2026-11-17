@@ -1,0 +1,2 @@
+// EXPECT-ERR: division by zero
+fn main() -> i32 { let a = 5; return a / 0; }

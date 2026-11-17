@@ -1,0 +1,2 @@
+// EXPECT-ERR: requires an `unsafe` block
+fn main() -> i32 { let s = String::from("a"); let p = s.as_ptr(); return *p as i32; }

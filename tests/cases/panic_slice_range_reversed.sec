@@ -1,0 +1,4 @@
+// EXPECT-PANIC: slice range 3..1
+fn id(x: usize) -> usize { x }
+fn sum(x: &[i32]) -> i32 { 0 }
+fn main() -> i32 { let a = [1, 2, 3, 4]; return sum(&a[id(3)..id(1)]); }

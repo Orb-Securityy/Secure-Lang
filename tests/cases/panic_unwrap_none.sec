@@ -1,0 +1,2 @@
+// EXPECT-PANIC: called `unwrap()` on a `None`
+fn main() -> i32 { let o: Option<i32> = None; return o.unwrap(); }

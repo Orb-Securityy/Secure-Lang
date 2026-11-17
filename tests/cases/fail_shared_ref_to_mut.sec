@@ -1,0 +1,4 @@
+// EXPECT-ERR: cannot pass a shared reference where `&mut` is required
+fn g(v: &mut Vec<i32>) { v.push(1); }
+fn f(v: &Vec<i32>) { g(v); }
+fn main() -> i32 { return 0; }

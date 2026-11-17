@@ -1,0 +1,5 @@
+// EXPECT-ERR: cannot call `&mut self` method
+struct C { n: i32 }
+impl C { fn inc(&mut self) { self.n += 1; } }
+fn f(c: &C) { c.inc(); }
+fn main() -> i32 { return 0; }

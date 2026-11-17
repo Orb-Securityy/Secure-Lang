@@ -1,0 +1,2 @@
+// EXPECT-PANIC: index out of bounds: the index is 3 but the length is 3
+fn main() -> i32 { let mut v: Vec<i32> = Vec::new(); v.push(1); v.push(2); v.push(3); let i: usize = 3; return v[i]; }

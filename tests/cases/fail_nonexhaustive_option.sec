@@ -1,0 +1,2 @@
+// EXPECT-ERR: non-exhaustive
+fn main() -> i32 { let o: Option<i32> = Some(1); match o { Some(x) => x } }

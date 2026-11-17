@@ -1,0 +1,2 @@
+// EXPECT-ERR: cannot negate unsigned
+fn main() -> i32 { let x: u32 = 5; let y = -x; return 0; }

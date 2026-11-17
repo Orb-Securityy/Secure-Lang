@@ -1,0 +1,4 @@
+// EXPECT-ERR: cannot assign through an immutable binding or shared reference
+fn f(v: &mut [i32]) {}
+fn g(p: &[i32]) { p[0] = 1; }
+fn main() -> i32 { return 0; }
