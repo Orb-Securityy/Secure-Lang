@@ -43,3 +43,15 @@ jobs:
         run: .venv-fuzz/bin/python -m pip install --disable-pip-version-check --require-hashes -r requirements-fuzz.txt
       - name: Fuzz lexer, parser, type checker and C lowering
         run: .venv-fuzz/bin/python tests/fuzz_frontend.py tests/fuzz_corpus -atheris_runs=30000
+
+  generated-c-analysis:
+    name: Generated C static analysis (GCC -fanalyzer)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Show analyzer version
+        run: gcc --version
+      - name: Analyze generated C from passing conformance cases
+        run: python3 tests/run_analyzer.py
