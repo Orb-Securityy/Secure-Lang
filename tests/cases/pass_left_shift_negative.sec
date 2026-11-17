@@ -1,0 +1,7 @@
+// EXPECT-OUT: -128 126 -128 127
+const NEGATIVE: i8 = -64i8 << 1u32;
+fn shift(x: i8, amount: u32) -> i8 { x << amount }
+fn main() -> i32 {
+    println(shift(-64i8, 1u32), " ", shift(63i8, 1u32), " ", NEGATIVE, " ", i8::MAX << 0u32);
+    return 0;
+}

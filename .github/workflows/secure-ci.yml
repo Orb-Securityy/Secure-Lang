@@ -16,14 +16,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Show toolchain
+        run: |
+          python3 --version
+          gcc --version
       - name: Verify Python syntax
-        run: python -m compileall -q securec tests
+        run: python3 -m compileall -q securec tests
       - name: Verify compiler entry point
         run: test -x bin/securec
+      - name: Test sanitizer diagnostics and front-end robustness
+        run: python3 -m unittest discover -s tests -p "test_*.py"
       - name: Run conformance suite
         run: python3 tests/run_tests.py
