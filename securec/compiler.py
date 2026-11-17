@@ -223,13 +223,31 @@ class Compiler:
         self.err("invalid type", n)
 
     def tsize(self, t):
+        """Conservative upper bound for a value's stack footprint on the 64-bit C ABI.
+
+        This is used to enforce MAX_ARRAY_BYTES, so underestimating aggregate padding
+        or payloads is unsafe. The small fixed overheads deliberately overestimate
+        C struct alignment/padding rather than attempting to predict exact layout.
+        """
         k = t.k
         if k == "int": return int_bits(t.name) // 8
         if k == "float": return 8
         if k in ("bool", "unit"): return 1
         if k == "enum": return 4
         if k == "array": return t.n * self.tsize(t.args[0])
-        if k == "struct": return sum(self.tsize(ft) for _, ft in self.structs[t.name]["fields"]) or 1
+        if k == "struct":
+            fields = self.structs[t.name]["fields"]
+            # At most seven bytes of padding can precede each field or follow the
+            # final field when all supported scalar alignments are <= 8 bytes.
+            return max(1, sum(self.tsize(ft) + 8 for _, ft in fields))
+        if k == "option":
+            # Tag, alignment before the payload, and trailing struct padding.
+            return self.tsize(t.args[0]) + 16
+        if k == "result":
+            # Tag plus worst-case alignment before each payload and at struct end.
+            return self.tsize(t.args[0]) + self.tsize(t.args[1]) + 24
+        # Slice/str, String/Vec, Task, pointers and references are conservatively
+        # charged 32 bytes (Task can include a platform pthread_t).
         return 32
 
     def needs_drop(self, t):
@@ -403,16 +421,26 @@ class Compiler:
         return self.assemble()
 
     def check_cycles(self):
+        def visit_type(t, stack):
+            if t.k == "struct":
+                visit(t.name, stack)
+            elif t.k in ("array", "option"):
+                visit_type(t.args[0], stack)
+            elif t.k == "result":
+                # Both Result payloads are stored inline and therefore contribute
+                # to the containing value's size.
+                visit_type(t.args[0], stack)
+                visit_type(t.args[1], stack)
+            # Vec, Task and raw pointers are indirections, not inline recursion.
+
         def visit(name, stack):
             if name in stack:
                 self.err(f"recursive type `{name}` has infinite size (use `Vec<T>` for indirection)",
                          self.structs[name]["node"])
+            next_stack = stack | {name}
             for _, ft in self.structs[name]["fields"]:
-                t = ft
-                while t.k in ("array", "option", "result"):
-                    t = t.args[0]
-                if t.k == "struct":
-                    visit(t.name, stack | {name})
+                visit_type(ft, next_stack)
+
         for nm in self.structs:
             visit(nm, frozenset())
 
