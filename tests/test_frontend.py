@@ -1,6 +1,7 @@
 import random
 import unittest
 
+from securec.compiler import Compiler
 from securec.lexer import SecError, lex
 from securec.parser import parse
 
@@ -55,6 +56,11 @@ class FrontendRobustnessTests(unittest.TestCase):
             with self.subTest(literal=literal[:24]):
                 with self.assertRaisesRegex(SecError, "out of range for f64"):
                     lex(literal)
+
+    def test_deep_expression_nesting_is_a_compiler_diagnostic(self):
+        source = "fn main() { let value = " + "(" * 2000 + "1" + ")" * 2000 + "; }"
+        with self.assertRaisesRegex(SecError, "source nesting exceeds"):
+            Compiler(source, "deep-nesting.sec").compile()
 
     def test_deterministic_malformed_token_streams_do_not_crash(self):
         rng = random.Random(0x5EC0)
