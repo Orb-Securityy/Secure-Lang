@@ -1,0 +1,13 @@
+// EXPECT-ERR: a spawned function may only take owned, thread-safe values
+struct PointerHolder { p: *const i32 }
+
+fn worker(value: PointerHolder) -> i32 {
+    return 0;
+}
+
+fn main() -> i32 {
+    let values: Vec<i32> = Vec::new();
+    let holder = PointerHolder { p: values.as_ptr() };
+    let task = spawn(worker, holder);
+    return task.join();
+}
