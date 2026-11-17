@@ -1,0 +1,5 @@
+// EXPECT-ERR: numeric separators must appear between digits
+fn main() -> i32 {
+    let value = 1__2;
+    return value;
+}
