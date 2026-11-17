@@ -14,6 +14,7 @@ with atheris.instrument_imports():
 MAX_INPUT_BYTES = 16 * 1024
 
 
+@atheris.instrument_func
 def test_one_input(data: bytes) -> None:
     if len(data) > MAX_INPUT_BYTES:
         return
