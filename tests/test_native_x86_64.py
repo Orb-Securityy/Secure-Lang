@@ -243,16 +243,16 @@ class NativeX8664Tests(unittest.TestCase):
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_mutable_i32_and_compound_assignments_execute(self):
         source = (
-            'fn main() {\\n'
-            '    let mut count: i32 = 3;\\n'
-            '    count += 2;\\n'
-            '    count *= 4;\\n'
-            '    count -= 1;\\n'
-            '    count /= 3;\\n'
-            '    count %= 5;\\n'
-            '    let mut branch_value = 5;\\n'
-            '    if branch_value > 3 { branch_value = 20; } else { branch_value = 10; }\\n'
-            '    if branch_value == 20 { println(count, ":", branch_value); } else { println("wrong"); }\\n'
+            'fn main() {\n'
+            '    let mut count: i32 = 3;\n'
+            '    count += 2;\n'
+            '    count *= 4;\n'
+            '    count -= 1;\n'
+            '    count /= 3;\n'
+            '    count %= 5;\n'
+            '    let mut branch_value = 5;\n'
+            '    if branch_value > 3 { branch_value = 20; } else { branch_value = 10; }\n'
+            '    if branch_value == 20 { println(count, ":", branch_value); } else { println("wrong"); }\n'
             '}'
         )
         image = compile_native_subset(source)
@@ -263,7 +263,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'1:20\\n')
+        self.assertEqual(result.stdout, b'1:20\n')
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
