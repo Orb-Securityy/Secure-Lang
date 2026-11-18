@@ -86,7 +86,7 @@ def _random_instruction(data: bytes, offset: int):
 
 def _validate_elf(image: bytes) -> None:
     """Reject malformed images even when the encoder returned without error."""
-    if len(image) < 64 or image[:4] != b"\\x7fELF":
+    if len(image) < 64 or image[:4] != b"\x7fELF":
         raise AssertionError("native emitter returned a truncated ELF image")
     if image[4:7] != bytes((2, 1, 1)):
         raise AssertionError("native emitter returned an unexpected ELF class or encoding")
