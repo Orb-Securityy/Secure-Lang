@@ -129,9 +129,12 @@ def _ir_output(ir):
 
 
 def _machine_code(data_length):
-    """Build _start using Linux x86-64 write(1, data, len) and exit syscalls."""
+    """Build _start with EINTR and partial-write handling via Linux syscalls."""
     if data_length == 0:
         return bytes.fromhex("b83c00000031ff0f05")
+    if not 0 < data_length <= MAX_OUTPUT:
+        raise ValueError("native write length is out of range")
+
     code = bytearray()
     code += bytes.fromhex("b801000000")       # mov eax, 1 (write)
     code += bytes.fromhex("bf01000000")       # mov edi, 1 (stdout)
@@ -139,13 +142,34 @@ def _machine_code(data_length):
     lea_next_ip_offset = len(code) + 4
     displacement = DATA_OFFSET - (CODE_OFFSET + lea_next_ip_offset)
     code += struct.pack("<i", displacement)
-    code += b"\xba" + struct.pack("<I", data_length)  # mov edx, len
-    code += bytes.fromhex("0f05")               # syscall
-    code += bytes.fromhex("4839d0")             # cmp rax, rdx
-    code += bytes.fromhex("7509")               # jne short failure exit
+    code += b"\\xba" + struct.pack("<I", data_length)  # mov edx, bytes remaining
+
+    loop_label = len(code)
+    code += bytes.fromhex("0f05")               # syscall: write
+    code += bytes.fromhex("4883f8fc")           # cmp rax, -EINTR
+    retry_branch = len(code)
+    code += bytes((0x74, 0))                    # je retry on EINTR
+    code += bytes.fromhex("4885c0")             # test rax, rax
+    fail_branch = len(code)
+    code += bytes((0x7E, 0))                    # jle fail on error or zero write
+    code += bytes.fromhex("4801c6")             # add rsi, rax
+    code += bytes.fromhex("4829c2")             # sub rdx, rax
+    again_branch = len(code)
+    code += bytes((0x75, 0))                    # jnz while bytes remain
+
     code += bytes.fromhex("b83c00000031ff0f05") # exit(0)
-    code += bytes.fromhex("b83c000000bf010000000f05")  # exit(1) on short/error write
-    if len(code) != 50:
+    fail_label = len(code)
+    code += bytes.fromhex("b83c000000bf010000000f05")  # exit(1)
+
+    for branch, target in ((retry_branch, loop_label),
+                           (fail_branch, fail_label),
+                           (again_branch, loop_label)):
+        displacement = target - (branch + 2)
+        if not -128 <= displacement <= 127:
+            raise AssertionError("native short branch is out of range")
+        code[branch + 1] = displacement & 0xFF
+
+    if len(code) != 64:
         raise AssertionError("internal native backend layout error")
     return bytes(code)
 
