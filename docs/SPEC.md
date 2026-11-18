@@ -70,7 +70,7 @@ borrow or move `x`. `&mut` requires the place to be declared `mut`. `&Vec<T>`/`&
 `&String` coerces to `&str`.
 
 ## 7. Errors and panics
-Recoverable errors are `Result`/`Option` values. A `Result` may not be silently discarded (compile error). Every control-flow path must consume a bound `Result`; consuming it only in the conditionally evaluated right operand of `&&`/`||` does not count, because short-circuiting may skip that operand.
+Recoverable errors are `Result`/`Option` values. A `Result` may not be silently discarded (compile error). Every control-flow path must consume a bound `Result`; consuming it only in the conditionally evaluated right operand of `&&`/`||` does not count, because short-circuiting may skip that operand. `Result` is affine even when its payload types are otherwise copyable: moving it invalidates the source binding. To keep must-use tracking sound, a `Result` cannot be nested in `Option`, `Vec`, `Task`, arrays, user-defined struct fields, or another `Result`. A mutable borrow of a direct `Result` binding requires the existing value to be handled first, and the value is considered pending again after the call (the callee may have replaced it).
 Contract violations (overflow, bounds, `unwrap` of `None`/`Err`, `assert`, `panic`) print
 `secure: panic at file:line:col: message` to stderr, flush stdout, and terminate with status **101**.
 There is no unwinding and no way to catch a panic (fail-fast).
