@@ -18,6 +18,8 @@ file `securec/secure_rt.h`. Compile-time assertions enforce 8-bit bytes, exact i
 proof of the checker; the argument is by construction (§3) plus tests. Removing GCC from the TCB (own backend)
 and mechanizing the ownership/borrow rules are roadmap items.
 
+**Separate experimental native path:** `securec native-build` uses a narrow Python parser/lowerer and the repository-owned x86-64 ELF backend. Its subset checker and IR verifier are not the same as the full `securec/compiler.py` type/ownership checker; none of the full language's security guarantees should be inferred for this subset. The native path avoids GCC/C/libc in the generated program's build/runtime chain, but its frontend is still Python and it is not self-hosted or production-ready.
+
 ## 3. Guarantees, mechanisms, evidence
 | Property | Mechanism | Evidence (tests) |
 |---|---|---|
