@@ -1,0 +1,6 @@
+// EXPECT-OUT: 1
+enum Small { A, B }
+fn main() -> i32 {
+    println(Small::B as u8);
+    return 0;
+}
