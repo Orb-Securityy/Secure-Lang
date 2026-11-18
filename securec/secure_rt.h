@@ -83,11 +83,21 @@ static inline T sec_sub_##N(T a, T b, const char *l) { T r; if (__builtin_expect
 static inline T sec_mul_##N(T a, T b, const char *l) { T r; if (__builtin_expect(__builtin_mul_overflow(a, b, &r), 0)) sec_panic("integer overflow in multiplication", l); return r; } \
 static inline T sec_div_##N(T a, T b, const char *l) { if (__builtin_expect(b == 0, 0)) sec_panic("division by zero", l); if ((MINV) < 0 && a == (T)(MINV) && b == (T)-1) sec_panic("integer overflow in division", l); return (T)(a / b); } \
 static inline T sec_rem_##N(T a, T b, const char *l) { if (__builtin_expect(b == 0, 0)) sec_panic("remainder by zero", l); if ((MINV) < 0 && a == (T)(MINV) && b == (T)-1) sec_panic("integer overflow in remainder", l); return (T)(a % b); } \
-static inline T sec_shl_##N(T a, u64 b, const char *l) { if (__builtin_expect(b >= (BITS), 0)) sec_panic("shift amount out of range", l); __int128 _sv = (__int128)a * ((__int128)1 << b); if (__builtin_expect(_sv < (__int128)(MINV) || _sv > (__int128)(MAXV), 0)) sec_panic("integer overflow in left shift", l); return (T)_sv; } \
+static inline T sec_shl_##N(T a, u64 b, const char *l) { \
+    if (__builtin_expect(b >= (BITS), 0)) sec_panic("shift amount out of range", l); \
+    if ((MINV) < 0) { \
+        __int128 _sv = (__int128)a * ((__int128)1 << b); \
+        if (__builtin_expect(_sv < (__int128)(MINV) || _sv > (__int128)(MAXV), 0)) sec_panic("integer overflow in left shift", l); \
+        return (T)_sv; \
+    } \
+    __uint128_t _uv = (__uint128_t)a * ((__uint128_t)1 << b); \
+    if (__builtin_expect(_uv > (__uint128_t)(MAXV), 0)) sec_panic("integer overflow in left shift", l); \
+    return (T)_uv; \
+} \
 static inline T sec_shr_##N(T a, u64 b, const char *l) { if (__builtin_expect(b >= (BITS), 0)) sec_panic("shift amount out of range", l); return (T)(a >> b); } \
 static inline T sec_wadd_##N(T a, T b) { return (T)((UT)a + (UT)b); } \
 static inline T sec_wsub_##N(T a, T b) { return (T)((UT)a - (UT)b); } \
-static inline T sec_wmul_##N(T a, T b) { return (T)((UT)a * (UT)b); } \
+static inline T sec_wmul_##N(T a, T b) { return (T)(UT)((__uint128_t)(UT)a * (__uint128_t)(UT)b); } \
 static inline T sec_sadd_##N(T a, T b) { T r; if (__builtin_add_overflow(a, b, &r)) return ((MINV) < 0 && b < 0) ? (T)(MINV) : (T)(MAXV); return r; } \
 static inline T sec_ssub_##N(T a, T b) { T r; if (__builtin_sub_overflow(a, b, &r)) return (b > 0) ? (T)(MINV) : (T)(MAXV); return r; } \
 static inline T sec_smul_##N(T a, T b) { T r; if (__builtin_mul_overflow(a, b, &r)) return ((a < 0) != (b < 0)) ? (T)(MINV) : (T)(MAXV); return r; } \

@@ -1,0 +1,17 @@
+// EXPECT-OUT: 1 1 1 1 1
+// Wrapping multiply must not overflow signed int after u16 integer promotion.
+fn mul_u8(a: u8, b: u8) -> u8 { wrapping_mul(a, b) }
+fn mul_u16(a: u16, b: u16) -> u16 { wrapping_mul(a, b) }
+fn mul_i16(a: i16, b: i16) -> i16 { wrapping_mul(a, b) }
+fn mul_u32(a: u32, b: u32) -> u32 { wrapping_mul(a, b) }
+fn mul_u64(a: u64, b: u64) -> u64 { wrapping_mul(a, b) }
+fn main() -> i32 {
+    println(
+        mul_u8(255u8, 255u8), " ",
+        mul_u16(65535u16, 65535u16), " ",
+        mul_i16(-1i16, -1i16), " ",
+        mul_u32(4294967295u32, 4294967295u32), " ",
+        mul_u64(18446744073709551615u64, 18446744073709551615u64)
+    );
+    return 0;
+}
