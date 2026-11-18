@@ -1,0 +1,6 @@
+// EXPECT-ERR: cannot overwrite unhandled `Result` binding `value`
+fn make() -> Result<i32, i32> { Err(7) }
+fn main() {
+    let mut value = make();
+    value = make();
+}
