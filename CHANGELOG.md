@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — must-use Result path tracking
+
+- Track unhandled `Result` bindings across blocks, branches, loops, returns, `?`, and short-circuit boolean operators.
+- A Result consumed only in the conditional RHS of `&&`/`||` remains unhandled because short-circuiting can skip that expression.
+- Add regressions for ignored/overwritten bindings, parameter handling, branch and loop paths, both short-circuit operators, and valid handling via `match`, `?`, `unwrap()`, and `unwrap_or()`.
+
 ## Unreleased — defined signed right shift
 
 - Implement signed arithmetic right shift with unsigned sign-fill and the existing range-safe decoder instead of C's implementation-defined signed right shift.
