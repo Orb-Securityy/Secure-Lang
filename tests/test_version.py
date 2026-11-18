@@ -18,7 +18,7 @@ class VersionConsistencyTests(unittest.TestCase):
     def test_changelog_has_a_matching_release_heading(self):
         changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         pattern = rf"^## {re.escape(VERSION)} — "
-        self.assertRegex(changelog, pattern, msg="CHANGELOG.md must describe VERSION")
+        self.assertRegex(changelog, re.compile(pattern, re.MULTILINE), msg="CHANGELOG.md must describe VERSION")
 
 
 if __name__ == "__main__":
