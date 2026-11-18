@@ -4,7 +4,7 @@
 
 - Make every `Result` non-Copy, including results with primitive payloads, so reading/moving one binding cannot clear the obligation while leaving an alias behind.
 - Reject nesting `Result` inside `Option`, `Vec`, `Task`, arrays, user-defined struct fields, or another `Result` until flow-sensitive tracking can follow the obligation through those aggregates.
-- Require a direct `Result` binding to be handled before a mutable borrow; conservatively mark it pending again after the call because the callee may replace it.
+- Reject safe mutable references to `Result`, which otherwise let callees overwrite an unhandled value behind the direct-assignment checker.
 - Add regressions for copy aliases, aggregate escapes, mutable-reference overwrite, and valid post-call handling.
 
 ## Unreleased — must-use Result path tracking
