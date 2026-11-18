@@ -2289,6 +2289,7 @@ class Compiler:
             if name == "unwrap":
                 noargs()
                 c, _ = self.consume(self.place_(recv), recv)
+                self.mark_result_handled(recv)
                 self.emit(f'if (!{c}.ok) sec_panic("called `unwrap()` on an `Err` value", {L});')
                 return unit_or(el, f"{c}.v")
             if name == "unwrap_or":
@@ -2298,6 +2299,7 @@ class Compiler:
                 if dt != el:
                     self.err(f"mismatched types: expected `{tstr(el)}`, found `{tstr(dt)}`", args[0])
                 c, _ = self.consume(self.place_(recv), recv)
+                self.mark_result_handled(recv)
                 r = self.tmp(self.ctype(el), f"{c}.ok ? {c}.v : {dc}")
                 if self.needs_drop(t.args[1]):
                     self.emit(f"if (!{c}.ok) {self.drop_stmt(t.args[1], c + '.e')}")
