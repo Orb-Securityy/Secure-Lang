@@ -113,6 +113,47 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'Hello, Secure!\n')
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_i32_constants_and_checked_arithmetic_execute(self):
+        source = (
+            'const BASE: i32 = 40;\\n'
+            'const NEGATIVE: i32 = -2;\\n'
+            'fn main() {\\n'
+            '    let increment: i32 = 2;\\n'
+            '    let answer = BASE + increment;\\n'
+            '    print("Answer: ", answer, "; ");\\n'
+            '    println(answer * 2, NEGATIVE);\\n'
+            '    println(-7 / 2, ":", -7 % 2);\\n'
+            '    println(-2147483648);\\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'i32-native')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'Answer: 42; 84-2\\n-3:-1\\n-2147483648\\n')
+
+    def test_native_i32_rejects_overflow_division_errors_and_wrong_types(self):
+        unsupported = [
+            'fn main() { println(2147483648); }',
+            'fn main() { println(2147483647 + 1); }',
+            'fn main() { println(1 / 0); }',
+            'fn main() { println(-2147483648 / -1); }',
+            'const TOO_BIG: i32 = 2147483647 + 1; fn main() {}',
+            'fn main() { println(1u8); }',
+            'fn main() { let number: u32 = 1; println(number); }',
+            'fn main() { let print: str = "shadow"; print("no"); }',
+            'fn main() { let println: str = "shadow"; println("no"); }',
+        ]
+        for source in unsupported:
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
     def test_native_subset_rejects_mutable_and_non_string_bindings(self):
         unsupported = [
             'fn main() { let mut name: str = "Secure"; println(name); }',
