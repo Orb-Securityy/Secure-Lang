@@ -21,6 +21,17 @@ typedef size_t usize; typedef double f64;
 typedef struct { char _; } sec_unit;
 #define SEC_UNIT ((sec_unit){0})
 
+/* The checker models usize as 64-bit and tsize() assumes scalar/Task fields
+ * have at most 8-byte alignment. Reject unsupported targets rather than
+ * silently emitting code with incorrect range or stack-size assumptions. */
+_Static_assert(sizeof(usize) == 8 && sizeof(void *) == 8,
+               "Secure bootstrap requires a 64-bit size_t and pointer ABI");
+_Static_assert(_Alignof(i64) <= 8 && _Alignof(u64) <= 8 && _Alignof(usize) <= 8 &&
+               _Alignof(void *) <= 8 && _Alignof(f64) <= 8,
+               "Secure bootstrap requires scalar alignment of at most 8 bytes");
+_Static_assert(sizeof(pthread_t) <= 16 && _Alignof(pthread_t) <= 8,
+               "Secure stack accounting requires pthread_t size <= 16 and alignment <= 8");
+
 #define SEC_MIN_i8 INT8_MIN
 #define SEC_MAX_i8 INT8_MAX
 #define SEC_MIN_i16 INT16_MIN
