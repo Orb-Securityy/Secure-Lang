@@ -1,4 +1,4 @@
-# Secure security model (v0.1.21)
+# Secure security model (v0.1.22)
 
 **Nothing here claims perfect security.** Each property below states *what is enforced, where, and which tests
 demonstrate it*. Tests live in `tests/cases` (`fail_*` must be rejected at compile time, `panic_*` must trap
