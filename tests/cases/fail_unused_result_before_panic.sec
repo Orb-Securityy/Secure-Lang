@@ -1,0 +1,5 @@
+// EXPECT-ERR: unused `Result` binding `value`
+fn main() {
+    let value: Result<i32, i32> = Err(1);
+    panic("deliberate stop");
+}
