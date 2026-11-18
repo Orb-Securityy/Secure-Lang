@@ -1822,7 +1822,14 @@ class Compiler:
         self.emit(f"if ({lo_c} > {hi_c} || {hi_c} > {ln}) sec_oob_range({lo_c}, {hi_c}, {ln}, {self.loc(tgt)});")
         sl = slice_(el)
         ct = self.ctype(sl)
-        r = self.tmp(ct, f"(({ct}){{{data} + {lo_c}, {hi_c} - {lo_c}}})")
+        # Empty Vec/String/slice values may carry a null data pointer. C does
+        # not define even NULL + 0, so preserve NULL instead of doing pointer
+        # arithmetic when the backing pointer is absent.
+        ptr_expr = f"({data} + {lo_c})" if t.k == "array" else (
+            f"({data} == NULL ? NULL : {data} + {lo_c})"
+        )
+        ptr = self.tmp(self.ctype(el) + "*", ptr_expr)
+        r = self.tmp(ct, f"(({ct}){{{ptr}, {hi_c} - {lo_c}}})")
         return Place(r, sl, b.mut and t.k not in ("str", "string"), b.root)
 
     def ref_coerce(self, pl, pt, n):
