@@ -1,0 +1,1 @@
+\x01fn main() { println("native fuzz seed"); }
