@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — affine Result values and escape prevention
+
+- Make every `Result` non-Copy, including results with primitive payloads, so reading/moving one binding cannot clear the obligation while leaving an alias behind.
+- Verify that moving a `Result` transfers its pending obligation to the destination binding, which can then be handled normally.
+- Reject nesting `Result` inside `Option`, `Vec`, `Task`, arrays, user-defined struct fields, or another `Result` until flow-sensitive tracking can follow the obligation through those aggregates.
+- Reject safe mutable references to `Result`, which otherwise let callees overwrite an unhandled value behind the direct-assignment checker.
+- Add regressions for copy aliases, aggregate escapes, mutable-reference overwrite, and rejected mutable-reference escape attempts.
+
 ## Unreleased — must-use Result path tracking
 
 - Track unhandled `Result` bindings across blocks, branches, loops, returns, `?`, and short-circuit boolean operators.

@@ -1,0 +1,5 @@
+// EXPECT-ERR: Task<Result<...>> is not supported
+fn take(task: Task<Result<i32, i32>>) {}
+fn main() -> i32 {
+    return 0;
+}

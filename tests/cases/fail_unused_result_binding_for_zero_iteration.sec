@@ -2,7 +2,7 @@
 fn main() -> i32 {
     let value: Result<i32, i32> = Ok(1);
     for i in 0usize..0usize {
-        println(i, value.unwrap());
+        println(i, value.is_ok());
     }
     return 0;
 }

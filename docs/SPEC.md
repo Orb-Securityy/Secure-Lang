@@ -15,13 +15,14 @@ Keywords: `fn let mut if else while loop for in return break continue struct enu
 | `String` | owned growable byte string | **moves** |
 | `[T; N]` | fixed array, `N` constant, ≤ 1 MiB | if `T` is Copy |
 | `Vec<T>` | owned growable array | **moves** |
-| `Option<T>`, `Result<T,E>` | no null, no exceptions | if payloads are Copy |
+| `Option<T>` | no null value | if payload is Copy |
+| `Result<T,E>` | recoverable success/error; every direct binding must be handled | **moves (always affine)** |
 | `Task<T>` | handle to a running thread | **moves** |
 | `struct`, C-like `enum` | | Copy iff no field owns resources |
 | `&T`, `&mut T`, `&[T]`, `&mut [T]`, `&str` | **second-class** references (§6) | n/a |
 | `*const T`, `*mut T` | raw pointers; dereference only in `unsafe` | yes |
 
-Rule of thumb: a type that owns heap memory or a thread **moves**; everything else copies.
+Rule of thumb: types that own heap memory, thread handles, or a `Result` value **move**; aggregate types move whenever one of their members moves.
 There are no implicit conversions between numeric types. Integer literals default to `i32` unless the
 context fixes the type (`let x: u8 = 5;`, `a + 1`). Inference is local: `let v: Vec<i32> = Vec::new();`.
 
@@ -70,7 +71,7 @@ borrow or move `x`. `&mut` requires the place to be declared `mut`. `&Vec<T>`/`&
 `&String` coerces to `&str`.
 
 ## 7. Errors and panics
-Recoverable errors are `Result`/`Option` values. A `Result` may not be silently discarded (compile error). Every control-flow path must consume a bound `Result`; consuming it only in the conditionally evaluated right operand of `&&`/`||` does not count, because short-circuiting may skip that operand.
+Recoverable errors are `Result`/`Option` values. A `Result` may not be silently discarded (compile error). Every control-flow path must consume a bound `Result`; consuming it only in the conditionally evaluated right operand of `&&`/`||` does not count, because short-circuiting may skip that operand. `Result` is affine even when its payload types are otherwise copyable: moving it invalidates the source binding. To keep must-use tracking sound, a `Result` cannot be nested in `Option`, `Vec`, `Task`, arrays, user-defined struct fields, or another `Result`. Safe mutable references to `Result` are prohibited because a callee could overwrite an unhandled value without passing through the direct-assignment checker. Shared inspection is allowed, but it does not consume the obligation.
 Contract violations (overflow, bounds, `unwrap` of `None`/`Err`, `assert`, `panic`) print
 `secure: panic at file:line:col: message` to stderr, flush stdout, and terminate with status **101**.
 There is no unwinding and no way to catch a panic (fail-fast).

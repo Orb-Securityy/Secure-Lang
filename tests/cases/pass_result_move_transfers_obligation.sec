@@ -1,0 +1,7 @@
+// EXPECT-OUT: 0
+fn main() -> i32 {
+    let original: Result<i32, i32> = Err(7);
+    let moved = original;
+    println(moved.unwrap_or(0));
+    return 0;
+}

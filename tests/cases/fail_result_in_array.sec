@@ -1,0 +1,5 @@
+// EXPECT-ERR: Result values cannot be stored in arrays
+fn main() -> i32 {
+    let values: [Result<i32, i32>; 2] = [Ok(7), Err(8)];
+    return 0;
+}

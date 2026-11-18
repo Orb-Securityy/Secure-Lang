@@ -1,7 +1,0 @@
-// EXPECT-ERR: array too large for the stack (limit 1 MiB)
-struct Big { data: [u8; 600000] }
-
-fn main() -> i32 {
-    let values: [Result<(), Big>; 2] = [Ok(()), Ok(())];
-    return 0;
-}

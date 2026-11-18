@@ -1,0 +1,9 @@
+// EXPECT-ERR: Result values cannot be stored in Vec<T>
+struct Node {
+    value: i32,
+    children: Vec<Result<Node, i32>>,
+}
+
+fn main() -> i32 {
+    return 0;
+}
