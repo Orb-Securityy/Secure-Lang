@@ -52,11 +52,11 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertTrue(all(not (h[1] & 2 and h[1] & 1) for h in loads))
 
     def test_native_elf_writer_rejects_code_overflow_and_bad_data_offset(self):
-        oversized_code = b"\\x90" * (MAX_NATIVE_CODE + 1)
+        oversized_code = b"\x90" * (MAX_NATIVE_CODE + 1)
         with self.assertRaises(ValueError):
             _write_elf64(oversized_code, b"", 0x102000)
         with self.assertRaises(ValueError):
-            _write_elf64(b"\\x90", b"data", 0x3000)
+            _write_elf64(b"\x90", b"data", 0x3000)
 
     def test_native_elf_segments_are_bounded_aligned_and_non_writable_executable(self):
         image = compile_native_subset('fn main() { println("ELF audit"); }')
