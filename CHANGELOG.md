@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — exhaustive wrapping property tests
+
+- Exhaust all signed and unsigned 8-bit operand pairs for wrapping addition, subtraction, and multiplication against independent modular reference models.
+- Exercise signed and unsigned 8-bit wrapping conversions across every 16-bit source pattern, with UBSan enabled.
+
 ## Unreleased — defined signed wrapping semantics
 
 - Convert wrapping arithmetic results and `as wrapping` casts through an explicit width-limited helper, avoiding out-of-range unsigned-to-signed C conversions.
