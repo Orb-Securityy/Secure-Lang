@@ -8,6 +8,8 @@
 - Range-check enum-to-integer conversions instead of relying on unchecked C casts.
 - Define wrapping arithmetic and wrapping casts through width-limited helpers, avoiding out-of-range unsigned-to-signed C conversions.
 - Add exhaustive i8/u8 wrapping arithmetic and conversion property checks under UBSan, plus signed-width, enum-cast, immutable-string, and ABI regressions.
+- Refresh security documentation to describe the enforced ABI, conversions, and current evidence accurately.
+
 ## 0.1.21 — call ordering and backend arithmetic hardening
 
 - Enforce the documented three-phase call argument order: evaluate by-value arguments, evaluate every reference-place expression, then form borrowed pointers.
