@@ -10,8 +10,9 @@ from unittest.mock import patch
 from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
-from securec.ir import (MAX_OUTPUT, MAX_NATIVE_FUNCTIONS, MAX_NATIVE_INSTRUCTIONS,
-                        IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit,
+from securec.ir import (MAX_OUTPUT, MAX_NATIVE_CONSTANTS, MAX_NATIVE_FUNCTIONS,
+                        MAX_NATIVE_INSTRUCTIONS, IRBinaryI32, IRCallI32,
+                        IRCompareBranch, IRConstI32, IRExit,
                         IRFunction, IRJump, IRLabel, IRLocalI32, IRParamI32, IRPrintI32,
                         IRProgram, IRReturnI32, IRStoreI32, IRUnaryI32, IRValue,
                         IRWrite, verify_ir)
@@ -783,6 +784,20 @@ class NativeX8664Tests(unittest.TestCase):
             with self.subTest(source_type=type(source).__name__):
                 with self.assertRaises(SecError):
                     compile_native_subset(source)
+
+    def test_native_source_rejects_too_many_constants(self):
+        declarations = "".join(
+            f"const VALUE{i}: i32 = {i};\\n"
+            for i in range(MAX_NATIVE_CONSTANTS + 1)
+        )
+        with self.assertRaises(SecError):
+            compile_native_subset(declarations + "fn main() {}")
+
+    def test_native_lowering_stops_at_instruction_budget(self):
+        statements = "    println(\\"x\\");\\n" * (MAX_NATIVE_INSTRUCTIONS // 2 + 1)
+        source = "fn main() {\\n" + statements + "}"
+        with self.assertRaises(SecError):
+            compile_native_subset(source)
 
     def test_native_source_rejects_too_many_user_functions(self):
         functions = "".join(
