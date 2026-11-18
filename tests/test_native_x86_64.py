@@ -149,6 +149,21 @@ class NativeX8664Tests(unittest.TestCase):
         ir = lower_to_ir(parse('fn main() { println("IR"); }'))
         self.assertIsInstance(ir, IRProgram)
         self.assertEqual(ir.instructions, (IRWrite(b"IR", True), IRExit(0)))
+    def test_native_build_does_not_import_legacy_c_compiler(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, 'isolated.sec')
+            output = os.path.join(directory, 'isolated')
+            with open(source, 'w', encoding='utf-8') as stream:
+                stream.write('fn main() { println("isolated"); }')
+            invocation = [sys.executable, '-c',
+                'import sys; from securec.driver import main; '
+                + f'code = main({["native-build", source, "-o", output]!r}); '
+                + 'assert "securec.compiler" not in sys.modules; raise SystemExit(code)']
+            result = subprocess.run(invocation, capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            execution = subprocess.run([output], capture_output=True, check=False)
+        self.assertEqual(execution.returncode, 0, execution.stderr)
+        self.assertEqual(execution.stdout, b'isolated\\n')
     def test_native_build_rejects_c_compiler_flags_and_program_args(self):
         with self.assertRaises(SystemExit):
             main(['native-build', 'unused.sec', '--sanitize'])
