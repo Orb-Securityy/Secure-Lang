@@ -1,0 +1,256 @@
+// Secure-written bounded arithmetic expression parser.
+// Grammar: decimal integers, + - * / % and parentheses, with ASCII whitespace.
+// Input limit: 256 bytes. Value/operator stacks are fixed at 128 entries.
+// Output: evaluated i32 result, or 90 for invalid input.
+
+fn is_digit(value: i32) -> i32 {
+    if value >= 48 {
+        if value <= 57 { return 1; }
+    }
+    return 0;
+}
+
+fn is_space(value: i32) -> i32 {
+    if value == 32 { return 1; }
+    if value == 9 { return 1; }
+    if value == 10 { return 1; }
+    if value == 13 { return 1; }
+    return 0;
+}
+
+fn is_operator(value: i32) -> i32 {
+    if value == 43 { return 1; }
+    if value == 45 { return 1; }
+    if value == 42 { return 1; }
+    if value == 47 { return 1; }
+    if value == 37 { return 1; }
+    return 0;
+}
+
+fn precedence(value: i32) -> i32 {
+    if value == 42 { return 2; }
+    if value == 47 { return 2; }
+    if value == 37 { return 2; }
+    return 1;
+}
+
+fn calculate(op: i32, left: i32, right: i32) -> i32 {
+    if op == 43 { return left + right; }
+    if op == 45 { return left - right; }
+    if op == 42 { return left * right; }
+    if op == 47 {
+        if right == 0 { return 0; }
+        return left / right;
+    }
+    if op == 37 {
+        if right == 0 { return 0; }
+        return left % right;
+    }
+    return 0;
+}
+
+fn main() {
+    let mut source: [u8; 256] = [0; 256];
+    let mut source_length: i32 = 0;
+    let mut current: i32 = read_byte();
+    let mut too_long: i32 = 0;
+
+    while current != -1 {
+        if source_length < 256 {
+            source[source_length] = current;
+            source_length += 1;
+            current = read_byte();
+        } else {
+            too_long = 1;
+            break;
+        }
+    }
+
+    if too_long == 1 {
+        println(90);
+    } else {
+        let mut values: [i32; 128] = [0; 128];
+        let mut operators: [u8; 128] = [0; 128];
+        let mut value_count: i32 = 0;
+        let mut operator_count: i32 = 0;
+        let mut cursor: i32 = 0;
+        let mut expecting_value: i32 = 1;
+        let mut invalid: i32 = 0;
+
+        while cursor < source_length {
+            let code: i32 = source[cursor];
+            if is_space(code) == 1 {
+                cursor += 1;
+            } else if is_digit(code) == 1 {
+                if expecting_value == 1 {
+                    let mut number: i32 = 0;
+                    while cursor < source_length {
+                        let digit_code: i32 = source[cursor];
+                        if is_digit(digit_code) == 1 {
+                            let digit: i32 = digit_code - 48;
+                            if number > 214748364 {
+                                invalid = 1;
+                                break;
+                            } else if number == 214748364 {
+                                if digit > 7 {
+                                    invalid = 1;
+                                    break;
+                                }
+                            }
+                            number = number * 10 + digit;
+                            cursor += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    if invalid == 0 {
+                        if value_count < 128 {
+                            values[value_count] = number;
+                            value_count += 1;
+                            expecting_value = 0;
+                        } else {
+                            invalid = 1;
+                        }
+                    }
+                } else {
+                    invalid = 1;
+                }
+            } else if code == 40 {
+                if expecting_value == 1 {
+                    if operator_count < 128 {
+                        operators[operator_count] = code;
+                        operator_count += 1;
+                        cursor += 1;
+                    } else {
+                        invalid = 1;
+                    }
+                } else {
+                    invalid = 1;
+                }
+            } else if code == 41 {
+                if expecting_value == 1 {
+                    invalid = 1;
+                } else {
+                    let mut found_open: i32 = 0;
+                    while operator_count > 0 {
+                        let top: i32 = operators[operator_count - 1];
+                        if top == 40 {
+                            operator_count -= 1;
+                            found_open = 1;
+                            break;
+                        } else {
+                            if value_count >= 2 {
+                                let right: i32 = values[value_count - 1];
+                                value_count -= 1;
+                                let left: i32 = values[value_count - 1];
+                                value_count -= 1;
+                                operator_count -= 1;
+                                if top == 47 {
+                                    if right == 0 { invalid = 1; }
+                                } else if top == 37 {
+                                    if right == 0 { invalid = 1; }
+                                }
+                                if invalid == 0 {
+                                    values[value_count] = calculate(top, left, right);
+                                    value_count += 1;
+                                }
+                            } else {
+                                invalid = 1;
+                            }
+                            if invalid == 1 { break; }
+                        }
+                    }
+                    if found_open == 0 { invalid = 1; }
+                    if invalid == 0 {
+                        cursor += 1;
+                        expecting_value = 0;
+                    }
+                }
+            } else if is_operator(code) == 1 {
+                if expecting_value == 1 {
+                    invalid = 1;
+                } else {
+                    while operator_count > 0 {
+                        let top: i32 = operators[operator_count - 1];
+                        if top == 40 {
+                            break;
+                        }
+                        if precedence(top) >= precedence(code) {
+                            if value_count >= 2 {
+                                let right: i32 = values[value_count - 1];
+                                value_count -= 1;
+                                let left: i32 = values[value_count - 1];
+                                value_count -= 1;
+                                operator_count -= 1;
+                                if top == 47 {
+                                    if right == 0 { invalid = 1; }
+                                } else if top == 37 {
+                                    if right == 0 { invalid = 1; }
+                                }
+                                if invalid == 0 {
+                                    values[value_count] = calculate(top, left, right);
+                                    value_count += 1;
+                                }
+                            } else {
+                                invalid = 1;
+                            }
+                        } else {
+                            break;
+                        }
+                        if invalid == 1 { break; }
+                    }
+                    if invalid == 0 {
+                        if operator_count < 128 {
+                            operators[operator_count] = code;
+                            operator_count += 1;
+                            cursor += 1;
+                            expecting_value = 1;
+                        } else {
+                            invalid = 1;
+                        }
+                    }
+                }
+            } else {
+                invalid = 1;
+            }
+            if invalid == 1 { break; }
+        }
+
+        if expecting_value == 1 { invalid = 1; }
+        while invalid == 0 {
+            if operator_count > 0 {
+                let top: i32 = operators[operator_count - 1];
+                if top == 40 {
+                    invalid = 1;
+                } else if value_count >= 2 {
+                    let right: i32 = values[value_count - 1];
+                    value_count -= 1;
+                    let left: i32 = values[value_count - 1];
+                    value_count -= 1;
+                    operator_count -= 1;
+                    if top == 47 {
+                        if right == 0 { invalid = 1; }
+                    } else if top == 37 {
+                        if right == 0 { invalid = 1; }
+                    }
+                    if invalid == 0 {
+                        values[value_count] = calculate(top, left, right);
+                        value_count += 1;
+                    }
+                } else {
+                    invalid = 1;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if invalid == 1 {
+            println(90);
+        } else if value_count == 1 {
+            println(values[0]);
+        } else {
+            println(90);
+        }
+    }
+}
