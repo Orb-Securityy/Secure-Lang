@@ -1,4 +1,5 @@
 """Small immutable, backend-neutral IR shared by Secure native compiler stages."""
+from collections import deque
 from dataclasses import dataclass
 
 
@@ -333,20 +334,30 @@ def verify_ir(ir):
         if len(reachable) != len(instructions):
             raise ValueError("native IR contains unreachable instructions")
 
+        # Forward must-analysis. Start non-entry nodes at TOP (all slots);
+        # the empty entry state then monotonically removes slots not defined on
+        # every path. Only successors of changed nodes need to be revisited.
         all_slots = set(range(next_slot))
         in_sets = [set(all_slots) for _ in instructions]
         out_sets = [set(all_slots) for _ in instructions]
-        changed = True
-        while changed:
-            changed = False
-            for index in sorted(reachable):
-                incoming = set() if index == 0 else set.intersection(
-                    *(out_sets[pred] for pred in predecessors[index])
-                )
-                outgoing = incoming | definitions[index]
-                if incoming != in_sets[index] or outgoing != out_sets[index]:
-                    in_sets[index], out_sets[index] = incoming, outgoing
-                    changed = True
+        in_sets[0] = set()
+        out_sets[0] = set(definitions[0])
+        worklist = deque(successors[0])
+        queued = set(worklist)
+        while worklist:
+            index = worklist.popleft()
+            queued.discard(index)
+            pred_states = [out_sets[pred] for pred in predecessors[index]]
+            incoming = (set.intersection(*(state for state in pred_states))
+                        if pred_states else set())
+            outgoing = incoming | definitions[index]
+            if incoming != in_sets[index] or outgoing != out_sets[index]:
+                in_sets[index] = incoming
+                out_sets[index] = outgoing
+                for successor in successors[index]:
+                    if successor not in queued:
+                        queued.add(successor)
+                        worklist.append(successor)
 
         for index in sorted(reachable):
             if not uses[index].issubset(in_sets[index]):
