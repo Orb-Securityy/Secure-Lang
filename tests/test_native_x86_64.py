@@ -91,6 +91,35 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'Hello, World!\nNative ELF\n')
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_code_spans_multiple_pages_before_read_only_data(self):
+        repeats = 300
+        source = 'fn main() {\\n' + '    println("X");\\n' * repeats + '}'
+        image = compile_native_subset(source)
+        phoff = struct.unpack_from('<Q', image, 32)[0]
+        phentsize, phnum = struct.unpack_from('<HH', image, 54)
+        headers = [struct.unpack_from('<IIQQQQQQ', image, phoff + i * phentsize)
+                   for i in range(phnum)]
+        loads = [header for header in headers if header[0] == 1]
+        self.assertEqual(len(loads), 2)
+        code, data = loads
+        self.assertEqual(code[1], 5)
+        self.assertGreater(code[5], 0x2000)
+        self.assertEqual(data[1], 4)
+        expected_data_offset = (code[5] + 0xFFF) & ~0xFFF
+        self.assertEqual(data[2], expected_data_offset)
+        self.assertEqual(data[3], expected_data_offset)
+        self.assertLessEqual(code[2] + code[5], data[2])
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'multi-page-code')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'X\\n' * repeats)
+
     def test_native_machine_code_has_eintr_and_partial_write_branches(self):
         image = compile_native_subset('fn main() { println("retry"); }')
         e_phoff = struct.unpack_from('<Q', image, 32)[0]
