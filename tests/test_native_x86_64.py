@@ -163,7 +163,7 @@ class NativeX8664Tests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             execution = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(execution.returncode, 0, execution.stderr)
-        self.assertEqual(execution.stdout, b'isolated\\n')
+        self.assertEqual(execution.stdout, b'isolated\n')
     def test_native_build_rejects_c_compiler_flags_and_program_args(self):
         with self.assertRaises(SystemExit):
             main(['native-build', 'unused.sec', '--sanitize'])
