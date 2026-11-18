@@ -117,15 +117,24 @@ class NativeX8664Tests(unittest.TestCase):
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_i32_constants_and_checked_arithmetic_execute(self):
         source = (
-            'const BASE: i32 = 40;\\n'
-            'const NEGATIVE: i32 = -2;\\n'
-            'fn main() {\\n'
-            '    let increment: i32 = 2;\\n'
-            '    let answer = BASE + increment;\\n'
-            '    print("Answer: ", answer, "; ");\\n'
-            '    println(answer * 2, NEGATIVE);\\n'
-            '    println(-7 / 2, ":", -7 % 2);\\n'
-            '    println(-2147483648);\\n'
+            'const BASE: i32 = 40;\
+'
+            'const NEGATIVE: i32 = -2;\
+'
+            'fn main() {\
+'
+            '    let increment: i32 = 2;\
+'
+            '    let answer = BASE + increment;\
+'
+            '    print("Answer: ", answer, "; ");\
+'
+            '    println(answer * 2, NEGATIVE);\
+'
+            '    println(-7 / 2, ":", -7 % 2);\
+'
+            '    println(-2147483648);\
+'
             '}'
         )
         image = compile_native_subset(source)
@@ -136,7 +145,10 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'Answer: 42; 84-2\\n-3:-1\\n-2147483648\\n')
+        self.assertEqual(result.stdout, b'Answer: 42; 84-2\
+-3:-1\
+-2147483648\
+')
 
     def test_native_i32_rejects_overflow_division_errors_and_wrong_types(self):
         unsupported = [
