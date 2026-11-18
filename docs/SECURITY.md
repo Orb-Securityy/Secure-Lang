@@ -65,7 +65,7 @@ and mechanizing the ownership/borrow rules are roadmap items.
   networking/TLS, file I/O policy, dependency integrity / supply-chain tooling (no package manager; only the source
   SHA-256 in `audit`), mutexes/channels/atomics, user generics/traits/closures.
 * `unsafe`/`extern` code is outside every guarantee above.
-* Signed `>>` is an arithmetic shift (GCC-defined behaviour); enum values are plain `i32`.
+* Signed `>>` is implemented with unsigned sign-fill and an in-range two's-complement decoder; it no longer depends on implementation-defined signed right-shift behaviour. Enum values are plain `i32`.
 
 ## 5. Roadmap (priority order)
 1. Expand fuzz corpus and campaign duration; broaden differential tests across integer widths and generated-C edge cases; formalize and mechanize the ownership/borrow rules.

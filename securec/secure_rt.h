@@ -121,7 +121,17 @@ static inline T sec_shl_##N(T a, u64 b, const char *l) { \
     if (__builtin_expect(_uv > (__uint128_t)(MAXV), 0)) sec_panic("integer overflow in left shift", l); \
     return (T)_uv; \
 } \
-static inline T sec_shr_##N(T a, u64 b, const char *l) { if (__builtin_expect(b >= (BITS), 0)) sec_panic("shift amount out of range", l); return (T)(a >> b); } \
+static inline T sec_wrap_##N(__uint128_t v); \
+static inline T sec_shr_##N(T a, u64 b, const char *l) { \
+    if (__builtin_expect(b >= (BITS), 0)) sec_panic("shift amount out of range", l); \
+    if ((MINV) < 0 && a < 0) { \
+        if (b == 0) return a; \
+        __uint128_t _raw = (__uint128_t)(UT)a; \
+        __uint128_t _fill = (((__uint128_t)1 << b) - 1) << ((BITS) - b); \
+        return sec_wrap_##N((_raw >> b) | _fill); \
+    } \
+    return (T)((UT)a >> b); \
+} \
 /* Convert the low BITS of an unsigned wide value to T without an out-of-range unsigned-to-signed cast. */ \
 static inline T sec_wrap_##N(__uint128_t v) { \
     __uint128_t _mask = (((__uint128_t)1 << (BITS)) - 1); \
