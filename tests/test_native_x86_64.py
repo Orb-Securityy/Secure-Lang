@@ -157,9 +157,9 @@ class NativeX8664Tests(unittest.TestCase):
     def test_native_subset_rejects_mutable_and_non_string_bindings(self):
         unsupported = [
             'fn main() { let mut name: str = "Secure"; println(name); }',
-            'fn main() { let number: i32 = 7; println("ok"); }',
+            'fn main() { let number: f64 = 7.0; println("ok"); }',
             'fn main() { let name: str = missing; println(name); }',
-            'const VALUE: i32 = 7; fn main() { println("ok"); }',
+            'const VALUE: f64 = 7.0; fn main() { println("ok"); }',
             'const print: str = "shadow"; fn main() { println("ok"); }',
             'fn main() { let name = "Secure"; name = "changed"; println(name); }',
         ]
@@ -240,10 +240,10 @@ class NativeX8664Tests(unittest.TestCase):
                 self.assertEqual(stream.read(), original)
     def test_rejects_constructs_outside_the_native_subset(self):
         unsupported = [
-            'fn main() { let x: i32 = 1; }',
+            'fn main() { let x: f64 = 1.0; }',
             'fn main() -> i32 { 0 }',
-            'fn main() { println(1); }',
-            'fn main() { println("ok"); let x: i32 = 3; }',
+            'fn main() { println(1.0); }',
+            'fn main() { println("ok"); let x: bool = true; }',
             'fn main() { unsafe { println("no"); } }',
         ]
         for source in unsupported:
