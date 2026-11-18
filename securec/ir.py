@@ -70,6 +70,12 @@ class IRArrayStoreI32:
 
 
 @dataclass(frozen=True)
+class IRReadByte:
+    """Read one byte from stdin; returns 0..255 or -1 at EOF."""
+    dest: int
+
+
+@dataclass(frozen=True)
 class IRUnaryI32:
     dest: int
     op: str
@@ -280,6 +286,12 @@ def verify_ir(ir):
                     raise ValueError("native array store requires valid index and value slots")
                 array_uses[index].add(instruction.array_id)
                 uses[index].update((instruction.index.slot, instruction.value.slot))
+            elif type(instruction) is IRReadByte:
+                non_param_seen = True
+                if type(instruction.dest) is not int or instruction.dest != next_slot:
+                    raise ValueError("native read-byte result slot must be defined in sequence")
+                definitions[index].add(instruction.dest)
+                next_slot += 1
             elif type(instruction) is IRUnaryI32:
                 non_param_seen = True
                 if type(instruction.dest) is not int or instruction.dest != next_slot:
