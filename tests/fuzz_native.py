@@ -85,7 +85,7 @@ def _random_instruction(data: bytes, offset: int):
 
 
 def _validate_elf(image: bytes) -> None:
-    """Reject malformed images even when the encoder returned without error."""
+    """Require the exact static-PIE segment contract emitted by this backend."""
     if len(image) < 64 or image[:4] != b"\x7fELF":
         raise AssertionError("native emitter returned a truncated ELF image")
     if image[4:7] != bytes((2, 1, 1)):
@@ -95,34 +95,52 @@ def _validate_elf(image: bytes) -> None:
         raise AssertionError("native emitter returned the wrong ELF target")
     entry = struct.unpack_from("<Q", image, 24)[0]
     phoff = struct.unpack_from("<Q", image, 32)[0]
+    ehsize = struct.unpack_from("<H", image, 52)[0]
     phentsize, phnum = struct.unpack_from("<HH", image, 54)
-    if phentsize != 56 or phnum not in (2, 3) or phoff + phentsize * phnum > len(image):
+    if ehsize != 64 or phoff != 64 or phentsize != 56:
+        raise AssertionError("native emitter returned a malformed ELF header")
+    if phnum not in (2, 3) or phoff + phentsize * phnum > len(image):
         raise AssertionError("native emitter returned an invalid program-header table")
+    if entry != 0x1000:
+        raise AssertionError("native ELF entrypoint is not the backend entry offset")
 
-    executable_entry_found = False
-    stack_header_found = False
+    code_found = False
+    data_found = False
+    stack_found = False
     for index in range(phnum):
         header = struct.unpack_from("<IIQQQQQQ", image, phoff + index * phentsize)
-        kind, flags, offset, vaddr, _paddr, filesz, memsz, align = header
+        kind, flags, offset, vaddr, paddr, filesz, memsz, align = header
         if kind == 1:
-            if align < 0x1000 or align & (align - 1):
-                raise AssertionError("native ELF load segment has invalid alignment")
-            if offset % align != vaddr % align:
-                raise AssertionError("native ELF load segment offset/address are incongruent")
             if offset + filesz > len(image) or filesz > memsz:
                 raise AssertionError("native ELF segment exceeds the file bounds")
-            if flags & 3 == 3:
-                raise AssertionError("native ELF contains a writable-executable segment")
-            if flags & 1 and vaddr <= entry < vaddr + memsz:
-                executable_entry_found = True
+            if align != 0x1000 or offset % align != vaddr % align:
+                raise AssertionError("native ELF load segment has invalid alignment")
+            if offset == 0:
+                if code_found or flags != 5 or vaddr != 0 or paddr != 0:
+                    raise AssertionError("native ELF code segment is not exactly RX")
+                if filesz != memsz or filesz <= 0x1000:
+                    raise AssertionError("native ELF code segment has invalid size")
+                if not vaddr <= entry < vaddr + memsz:
+                    raise AssertionError("native ELF entrypoint is outside RX code")
+                code_found = True
+            elif offset == 0x2000:
+                if data_found or flags != 4 or vaddr != 0x2000 or paddr != 0x2000:
+                    raise AssertionError("native ELF data segment is not exactly R-only")
+                if not filesz or filesz != memsz:
+                    raise AssertionError("native ELF read-only data segment has invalid size")
+                if not code_found:
+                    raise AssertionError("native ELF data precedes its code segment")
+                data_found = True
+            else:
+                raise AssertionError("native ELF contains an unexpected load segment")
         elif kind == 0x6474E551:
-            stack_header_found = True
-            if flags & 1:
-                raise AssertionError("native ELF requests an executable stack")
-        elif kind in (2, 3):
-            raise AssertionError("native ELF unexpectedly requires dynamic linking")
-    if not executable_entry_found or not stack_header_found:
-        raise AssertionError("native ELF is missing an executable entry segment or NX stack")
+            if stack_found or flags != 6 or offset or vaddr or paddr or filesz or memsz or align != 16:
+                raise AssertionError("native ELF stack segment is not exactly RW/NX")
+            stack_found = True
+        else:
+            raise AssertionError("native ELF contains an unsupported program header")
+    if not code_found or not stack_found or data_found != (phnum == 3):
+        raise AssertionError("native ELF segment table does not match the static-PIE contract")
 
 
 def _fuzz_ir(data: bytes) -> None:
