@@ -1,5 +1,5 @@
 """Python bootstrap frontend/lowering for the restricted native Secure subset."""
-from .ir import (IRBinaryI32, IRBranchI32, IRConstI32, IRExit, IRJump, IRLabel,
+from .ir import (IRBinaryI32, IRCompareBranch, IRConstI32, IRExit, IRJump, IRLabel,
                  IRPrintI32, IRProgram, IRUnaryI32, IRValue, IRWrite)
 from .lexer import SecError
 from .native_x86_64 import emit_native
@@ -217,7 +217,7 @@ def lower_to_ir(items):
         then_label = new_label()
         end_label = new_label()
         else_label = new_label() if node.els is not None else end_label
-        instructions.append(IRBranchI32(cond.op, left, right, then_label, else_label))
+        instructions.append(IRCompareBranch(left, cond.op, right, then_label, else_label))
         instructions.append(IRLabel(then_label))
         lower_block(node.then, bindings)
         if node.els is not None:
