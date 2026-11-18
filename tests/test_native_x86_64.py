@@ -86,7 +86,7 @@ class NativeX8664Tests(unittest.TestCase):
                 [output], input=b'10 + 2 * (3 + 4)', capture_output=True, check=False
             )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'24\\n')
+        self.assertEqual(result.stdout, b'24\n')
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
@@ -102,7 +102,7 @@ class NativeX8664Tests(unittest.TestCase):
                         [output], input=payload, capture_output=True, check=False
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(result.stdout, b'90\\n')
+                    self.assertEqual(result.stdout, b'90\n')
 
     def test_native_fixed_arrays_reject_mutation_of_immutable_arrays(self):
         source = 'fn main() { let values: [i32; 2] = [0; 2]; values[0] = 1; }'
