@@ -66,7 +66,7 @@ class NativeX8664Tests(unittest.TestCase):
             self.assertTrue(os.stat(output).st_mode & 0o111)
             result = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'Built by Secure\\n')
+        self.assertEqual(result.stdout, b'Built by Secure\n')
     def test_rejects_constructs_outside_the_native_subset(self):
         unsupported = [
             'fn main() { let x: i32 = 1; }',
