@@ -102,6 +102,8 @@ def _emit_program_code(ir):
         elif type(instruction) is IRPrintI32:
             _emit_i32_formatter(code, instruction.value, instruction.newline, call_fixups)
             needs_write_helper = True
+        elif type(instruction).__name__ == "IRExit":
+            continue  # verify_ir requires this to be the final instruction
         else:
             raise ValueError("unknown native IR instruction")
 
