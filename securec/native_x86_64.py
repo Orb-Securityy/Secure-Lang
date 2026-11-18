@@ -31,7 +31,7 @@ def _program_output(items):
                 or len(expr.args) != 1 or expr.args[0].k != 'Str'):
             raise SecError("native subset supports only `println(\"string literal\");` statements",
                            getattr(stmt, 'line', fn.line), getattr(stmt, 'col', fn.col))
-        chunks.append(expr.args[0].val + b'\\n')
+        chunks.append(expr.args[0].val + b'\n')
     output = b''.join(chunks)
     if len(output) > MAX_OUTPUT:
         raise SecError("native subset output exceeds the 1 MiB limit", fn.line, fn.col)
@@ -52,7 +52,7 @@ def _machine_code(data_length):
     data_offset = CODE_OFFSET + 50
     displacement = data_offset - (CODE_OFFSET + lea_next_ip_offset)
     code += struct.pack('<i', displacement)
-    code += b'\\xba' + struct.pack('<I', data_length)  # mov edx, len
+    code += b'\xba' + struct.pack('<I', data_length)  # mov edx, len
     code += bytes.fromhex('0f05')               # syscall
     code += bytes.fromhex('4839d0')             # cmp rax, rdx
     code += bytes.fromhex('7509')               # jne short failure exit
@@ -72,7 +72,7 @@ def build_elf64(data):
     if len(code) > 0x1000:
         raise ValueError("native code exceeds the first backend page")
     image_size = CODE_OFFSET + len(code) + len(data)
-    ident = b'\\x7fELF' + bytes((2, 1, 1, 0, 0)) + bytes(7)
+    ident = b'\x7fELF' + bytes((2, 1, 1, 0, 0)) + bytes(7)
     ehdr = ident + struct.pack(
         '<HHIQQQIHHHHHH',
         2,                 # ET_EXEC
