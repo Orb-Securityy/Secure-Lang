@@ -1,0 +1,10 @@
+// EXPECT-ERR: cannot mutably borrow unhandled Result binding value
+fn overwrite(value: &mut Result<i32, i32>) {
+    *value = Ok(8);
+}
+fn main() -> i32 {
+    let mut value: Result<i32, i32> = Err(7);
+    overwrite(&mut value);
+    println(value.unwrap());
+    return 0;
+}
