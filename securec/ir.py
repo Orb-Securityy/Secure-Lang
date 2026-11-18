@@ -7,6 +7,8 @@ I32_MIN = -(1 << 31)
 I32_MAX = (1 << 31) - 1
 COMPARE_OPS = ("==", "!=", "<", "<=", ">", ">=")
 MAX_NATIVE_ARGS = 32
+MAX_NATIVE_FUNCTIONS = 128
+MAX_NATIVE_INSTRUCTIONS = 2048
 
 
 @dataclass(frozen=True)
@@ -121,7 +123,12 @@ def verify_ir(ir):
         raise ValueError("invalid native IR program")
     if type(ir.functions) is not tuple:
         raise ValueError("native IR functions must be a tuple")
+    if len(ir.instructions) > MAX_NATIVE_INSTRUCTIONS:
+        raise ValueError("native IR exceeds the instruction limit")
+    if len(ir.functions) > MAX_NATIVE_FUNCTIONS:
+        raise ValueError("native IR exceeds the function limit")
 
+    total_instructions = len(ir.instructions)
     functions = {}
     for function in ir.functions:
         if (type(function) is not IRFunction or type(function.name) is not str
@@ -132,6 +139,9 @@ def verify_ir(ir):
             raise ValueError("invalid native IR function")
         if function.name in functions:
             raise ValueError("duplicate native IR function")
+        total_instructions += len(function.instructions)
+        if total_instructions > MAX_NATIVE_INSTRUCTIONS:
+            raise ValueError("native IR exceeds the total instruction limit")
         functions[function.name] = function
 
     signatures = {name: function.param_count for name, function in functions.items()}
