@@ -217,7 +217,7 @@ def lower_to_ir(items):
         if function.unsafe or function.extern or function.body is None or not _is_i32_type(function.ret):
             _error("native user functions must be safe, defined, and return i32 explicitly", function)
         if len(function.params) > MAX_NATIVE_ARGS:
-            _error(f"native functions support at most {MAX_NATIVE_ARGS} i32 parameters", function)
+            _error(f"native functions support at most {MAX_NATIVE_ARGS} i32 parameters (first six in registers, remaining on stack)", function)
         seen_params = set()
         for parameter in function.params:
             if parameter.name in seen_params or not _is_i32_type(parameter.ty):
