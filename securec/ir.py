@@ -41,6 +41,13 @@ class IRLocalI32:
 
 
 @dataclass(frozen=True)
+class IRCopyI32:
+    """An immutable value snapshot copied from an existing scalar slot."""
+    dest: int
+    initial: IRValue
+
+
+@dataclass(frozen=True)
 class IRStoreI32:
     dest: int
     value: IRValue
@@ -238,6 +245,15 @@ def verify_ir(ir):
                 uses[index].add(instruction.initial.slot)
                 definitions[index].add(instruction.dest)
                 mutable_slots.add(instruction.dest)
+                next_slot += 1
+            elif type(instruction) is IRCopyI32:
+                non_param_seen = True
+                if type(instruction.dest) is not int or instruction.dest != next_slot:
+                    raise ValueError("native immutable copy slot must be defined in sequence")
+                if type(instruction.initial) is not IRValue or type(instruction.initial.slot) is not int:
+                    raise ValueError("native immutable copy requires an initialized i32 slot")
+                uses[index].add(instruction.initial.slot)
+                definitions[index].add(instruction.dest)
                 next_slot += 1
             elif type(instruction) is IRStoreI32:
                 non_param_seen = True
