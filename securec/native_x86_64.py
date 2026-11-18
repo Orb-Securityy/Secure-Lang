@@ -218,7 +218,7 @@ def _emit_program_code(ir):
         slot_types = (IRConstI32, IRParamI32, IRLocalI32, IRUnaryI32, IRBinaryI32, IRCallI32)
         slot_count = sum(type(ins) in slot_types for ins in instructions)
         needs_stack_buffer = any(type(ins) is IRPrintI32 for ins in instructions)
-        local_bytes = (32 if needs_stack_buffer else 0) + slot_count * 4
+        local_bytes = 32 + slot_count * 4
         if local_bytes:
             if is_entry:
                 frame_size = ((local_bytes + 15) // 16) * 16
