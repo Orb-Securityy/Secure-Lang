@@ -84,6 +84,47 @@ def _random_instruction(data: bytes, offset: int):
     return "unknown-instruction"
 
 
+def _validate_elf(image: bytes) -> None:
+    """Reject malformed images even when the encoder returned without error."""
+    if len(image) < 64 or image[:4] != b"\\x7fELF":
+        raise AssertionError("native emitter returned a truncated ELF image")
+    if image[4:7] != bytes((2, 1, 1)):
+        raise AssertionError("native emitter returned an unexpected ELF class or encoding")
+    elf_type, machine = struct.unpack_from("<HH", image, 16)
+    if (elf_type, machine) != (3, 62):
+        raise AssertionError("native emitter returned the wrong ELF target")
+    entry = struct.unpack_from("<Q", image, 24)[0]
+    phoff = struct.unpack_from("<Q", image, 32)[0]
+    phentsize, phnum = struct.unpack_from("<HH", image, 54)
+    if phentsize != 56 or phnum not in (2, 3) or phoff + phentsize * phnum > len(image):
+        raise AssertionError("native emitter returned an invalid program-header table")
+
+    executable_entry_found = False
+    stack_header_found = False
+    for index in range(phnum):
+        header = struct.unpack_from("<IIQQQQQQ", image, phoff + index * phentsize)
+        kind, flags, offset, vaddr, _paddr, filesz, memsz, align = header
+        if kind == 1:
+            if align < 0x1000 or align & (align - 1):
+                raise AssertionError("native ELF load segment has invalid alignment")
+            if offset % align != vaddr % align:
+                raise AssertionError("native ELF load segment offset/address are incongruent")
+            if offset + filesz > len(image) or filesz > memsz:
+                raise AssertionError("native ELF segment exceeds the file bounds")
+            if flags & 3 == 3:
+                raise AssertionError("native ELF contains a writable-executable segment")
+            if flags & 1 and vaddr <= entry < vaddr + memsz:
+                executable_entry_found = True
+        elif kind == 0x6474E551:
+            stack_header_found = True
+            if flags & 1:
+                raise AssertionError("native ELF requests an executable stack")
+        elif kind in (2, 3):
+            raise AssertionError("native ELF unexpectedly requires dynamic linking")
+    if not executable_entry_found or not stack_header_found:
+        raise AssertionError("native ELF is missing an executable entry segment or NX stack")
+
+
 def _fuzz_ir(data: bytes) -> None:
     count = 1 + (_byte(data, 1) % MAX_IR_INSTRUCTIONS)
     instructions = tuple(_random_instruction(data, 2 + i * 13) for i in range(count))
@@ -102,25 +143,7 @@ def _fuzz_ir(data: bytes) -> None:
         image = emit_native(program)
     except ValueError:
         return
-
-    # Every accepted object must still be a structurally bounded x86-64 PIE.
-    if len(image) < 64 or image[:4] != b"\x7fELF":
-        raise AssertionError("native emitter returned a truncated ELF image")
-    elf_type, machine = struct.unpack_from("<HH", image, 16)
-    if (elf_type, machine) != (3, 62):
-        raise AssertionError("native emitter returned the wrong ELF target")
-    phoff = struct.unpack_from("<Q", image, 32)[0]
-    phentsize, phnum = struct.unpack_from("<HH", image, 54)
-    if phentsize != 56 or phoff + phentsize * phnum > len(image):
-        raise AssertionError("native emitter returned an invalid program-header table")
-    for index in range(phnum):
-        header = struct.unpack_from("<IIQQQQQQ", image, phoff + index * phentsize)
-        kind, flags, offset, _vaddr, _paddr, filesz, memsz, _align = header
-        if kind == 1:
-            if offset + filesz > len(image) or filesz > memsz:
-                raise AssertionError("native ELF segment exceeds the file bounds")
-            if flags & 3 == 3:
-                raise AssertionError("native ELF contains a writable-executable segment")
+    _validate_elf(image)
 
 
 @atheris.instrument_func
@@ -139,8 +162,7 @@ def test_one_input(data: bytes) -> None:
             return
         if len(image) > 0x2000 + (1 << 20) + 4096:
             raise AssertionError("native compiler emitted an oversized image")
-        if image[:4] != b"\x7fELF":
-            raise AssertionError("native compiler did not emit ELF")
+        _validate_elf(image)
     else:
         _fuzz_ir(payload)
 
