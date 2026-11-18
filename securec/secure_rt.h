@@ -97,7 +97,7 @@ static inline T sec_shl_##N(T a, u64 b, const char *l) { \
 static inline T sec_shr_##N(T a, u64 b, const char *l) { if (__builtin_expect(b >= (BITS), 0)) sec_panic("shift amount out of range", l); return (T)(a >> b); } \
 static inline T sec_wadd_##N(T a, T b) { return (T)((UT)a + (UT)b); } \
 static inline T sec_wsub_##N(T a, T b) { return (T)((UT)a - (UT)b); } \
-static inline T sec_wmul_##N(T a, T b) { return (T)((UT)a * (UT)b); } \
+static inline T sec_wmul_##N(T a, T b) { return (T)(UT)((__uint128_t)(UT)a * (__uint128_t)(UT)b); } \
 static inline T sec_sadd_##N(T a, T b) { T r; if (__builtin_add_overflow(a, b, &r)) return ((MINV) < 0 && b < 0) ? (T)(MINV) : (T)(MAXV); return r; } \
 static inline T sec_ssub_##N(T a, T b) { T r; if (__builtin_sub_overflow(a, b, &r)) return (b > 0) ? (T)(MINV) : (T)(MAXV); return r; } \
 static inline T sec_smul_##N(T a, T b) { T r; if (__builtin_mul_overflow(a, b, &r)) return ((a < 0) != (b < 0)) ? (T)(MINV) : (T)(MAXV); return r; } \
