@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — empty slice pointer safety
+
+- Avoid undefined null-pointer arithmetic when forming empty slices from `Vec`, `String`, or an existing slice.
+- Add a sanitizer-backed regression for empty `Vec` and `String` ranges.
+
 ## Unreleased — call argument evaluation order
 
 - Evaluate every by-value call argument before evaluating reference-place expressions, including index and slice-bound expressions.
