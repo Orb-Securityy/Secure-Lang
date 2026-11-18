@@ -875,7 +875,7 @@ class NativeX8664Tests(unittest.TestCase):
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_user_function_calls_parameters_and_returns_execute(self):
         source = (
-            'fn add(a: i32, b: i32) -> i32 { return a + b; }\\n'
+            'fn add(a: i32, b: i32) -> i32 { return a + b; }\n'
             'fn main() { println(add(20, 22)); }'
         )
         image = compile_native_subset(source)
@@ -886,16 +886,16 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'42\\n')
+        self.assertEqual(result.stdout, b'42\n')
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_forward_nested_and_six_argument_function_calls_execute(self):
         source = (
-            'fn sum6(a: i32, b: i32, c: i32, d: i32, e: i32, f: i32) -> i32 {\\n'
-            '    return add(add(add(a, b), add(c, d)), add(e, f));\\n'
-            '}\\n'
-            'fn add(x: i32, y: i32) -> i32 { return x + y; }\\n'
+            'fn sum6(a: i32, b: i32, c: i32, d: i32, e: i32, f: i32) -> i32 {\n'
+            '    return add(add(add(a, b), add(c, d)), add(e, f));\n'
+            '}\n'
+            'fn add(x: i32, y: i32) -> i32 { return x + y; }\n'
             'fn main() { println(sum6(1, 2, 3, 4, 5, 6)); }'
         )
         image = compile_native_subset(source)
@@ -906,15 +906,15 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'21\\n')
+        self.assertEqual(result.stdout, b'21\n')
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_recursive_function_calls_and_multiple_returns_execute(self):
         source = (
-            'fn factorial(n: i32) -> i32 {\\n'
-            '    if n <= 1 { return 1; } else { return n * factorial(n - 1); }\\n'
-            '}\\n'
+            'fn factorial(n: i32) -> i32 {\n'
+            '    if n <= 1 { return 1; } else { return n * factorial(n - 1); }\n'
+            '}\n'
             'fn main() { println(factorial(5)); }'
         )
         image = compile_native_subset(source)
@@ -925,14 +925,14 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'120\\n')
+        self.assertEqual(result.stdout, b'120\n')
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_mutable_parameter_and_zero_argument_function_execute(self):
         source = (
-            'fn answer() -> i32 { return 41; }\\n'
-            'fn increment(mut value: i32) -> i32 { value += 1; return value; }\\n'
+            'fn answer() -> i32 { return 41; }\n'
+            'fn increment(mut value: i32) -> i32 { value += 1; return value; }\n'
             'fn main() { println(increment(answer())); }'
         )
         image = compile_native_subset(source)
@@ -943,7 +943,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'42\\n')
+        self.assertEqual(result.stdout, b'42\n')
 
     def test_native_functions_reject_bad_signatures_and_missing_returns(self):
         unsupported = [
