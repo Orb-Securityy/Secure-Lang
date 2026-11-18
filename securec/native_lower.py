@@ -203,11 +203,15 @@ def lower_to_ir(items):
             if item.name in raw_functions or item.name in ("print", "println"):
                 _error(f"duplicate or reserved native function `{item.name}`", item)
             raw_functions[item.name] = item
-            if len(raw_functions) > MAX_NATIVE_FUNCTIONS:
-                _error(f"native subset supports at most {MAX_NATIVE_FUNCTIONS} functions", item)
         elif item.k != "Const":
             _error("native subset accepts only constants and function declarations", item)
 
+    user_function_count = len(raw_functions) - int("main" in raw_functions)
+    if user_function_count > MAX_NATIVE_FUNCTIONS:
+        _error(
+            f"native subset supports at most {MAX_NATIVE_FUNCTIONS} user functions",
+            next(iter(raw_functions.values())),
+        )
     constant_names = {item.name for item in items if item.k == "Const"}
     main = raw_functions.get("main")
     if main is None:
