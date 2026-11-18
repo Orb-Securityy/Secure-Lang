@@ -1,6 +1,6 @@
 """Python bootstrap frontend/lowering for the restricted native Secure subset."""
 from .ir import (IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit, IRFunction, IRJump,
-                 IRLabel, IRLocalI32, IRParamI32, IRPrintI32, IRProgram, IRReturnI32,
+                 IRLabel, IRLocalI32, IRParamI32, IRPrintI32, IRProgram, IRReadByte, IRReturnI32,
                  IRStoreI32, IRUnaryI32, IRValue, IRWrite, MAX_NATIVE_ARGS,
                  MAX_NATIVE_CONSTANTS, MAX_NATIVE_FUNCTIONS, MAX_NATIVE_INSTRUCTIONS)
 from .lexer import SecError
@@ -118,6 +118,10 @@ def _expression_kind(expr, bindings, constants, function_signatures=None):
             _error("native integer arithmetic requires two i32 operands", expr)
         return "i32"
     if expr.k == "Call":
+        if expr.fn.k == "Var" and expr.fn.name == "read_byte":
+            if expr.args:
+                _error("native read_byte() takes no arguments", expr)
+            return "i32"
         if expr.fn.k != "Var" or expr.fn.name not in function_signatures:
             _error("native expression calls must target a declared i32 function", expr)
         expected = function_signatures[expr.fn.name]
@@ -184,6 +188,13 @@ def _lower_i32(expr, bindings, constants, instructions, next_slot, function_sign
         instructions.append(IRBinaryI32(dest, expr.op, left, right))
         return IRValue(dest)
     if expr.k == "Call":
+        if expr.fn.k == "Var" and expr.fn.name == "read_byte":
+            if expr.args:
+                _error("native read_byte() takes no arguments", expr)
+            dest = next_slot[0]
+            next_slot[0] += 1
+            instructions.append(IRReadByte(dest))
+            return IRValue(dest)
         if expr.fn.k != "Var" or expr.fn.name not in function_signatures:
             _error("native expression calls must target a declared i32 function", expr)
         expected = function_signatures[expr.fn.name]
@@ -208,7 +219,7 @@ def lower_to_ir(items):
     constant_count = 0
     for item in items:
         if item.k == "Fn":
-            if item.name in raw_functions or item.name in ("print", "println"):
+            if item.name in raw_functions or item.name in ("print", "println", "read_byte"):
                 _error(f"duplicate or reserved native function `{item.name}`", item)
             raw_functions[item.name] = item
         elif item.k == "Const":
@@ -243,7 +254,7 @@ def lower_to_ir(items):
         for parameter in function.params:
             if (parameter.name in seen_params or parameter.name in constant_names
                     or parameter.name in raw_functions
-                    or parameter.name in ("print", "println")
+                    or parameter.name in ("print", "println", "read_byte")
                     or not _is_i32_type(parameter.ty)):
                 _error("native function parameters must have unique, unreserved names and type i32", parameter)
             seen_params.add(parameter.name)
@@ -252,7 +263,7 @@ def lower_to_ir(items):
     for item in items:
         if item.k != "Const":
             continue
-        if item.name in constants or item.name in raw_functions or item.name in ("print", "println"):
+        if item.name in constants or item.name in raw_functions or item.name in ("print", "println", "read_byte"):
             _error(f"duplicate or reserved native constant `{item.name}`", item)
         kind = _declared_kind(item.ty, item)
         if kind == "str":
@@ -335,7 +346,7 @@ def lower_to_ir(items):
         instructions = ctx["instructions"]
         next_slot = ctx["next_slot"]
         if (node.var in bindings or node.var in constants or node.var in raw_functions
-                or node.var in ("print", "println")):
+                or node.var in ("print", "println", "read_byte")):
             _error(f"duplicate, reserved, or shadowed native loop variable `{node.var}`", node)
         if (_expression_kind(node.lo, bindings, constants, function_signatures) != "i32"
                 or _expression_kind(node.hi, bindings, constants, function_signatures) != "i32"):
@@ -420,7 +431,7 @@ def lower_to_ir(items):
         for stmt_index, stmt in enumerate(block.stmts):
             if stmt.k == "Let":
                 if (stmt.name in bindings or stmt.name in constants
-                        or stmt.name in raw_functions or stmt.name in ("print", "println")):
+                        or stmt.name in raw_functions or stmt.name in ("print", "println", "read_byte")):
                     _error(f"duplicate, reserved, or shadowed native binding `{stmt.name}`", stmt)
                 inferred = _expression_kind(stmt.init, bindings, constants, function_signatures)
                 declared = _declared_kind(stmt.ty, stmt) if stmt.ty is not None else inferred
