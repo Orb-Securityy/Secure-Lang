@@ -1,6 +1,6 @@
 """Python bootstrap frontend/lowering for the restricted native Secure subset."""
-from .ir import (IRBinaryI32, IRCompareBranch, IRConstI32, IRExit, IRJump, IRLabel,
-                 IRPrintI32, IRProgram, IRUnaryI32, IRValue, IRWrite)
+from .ir import (IRBinaryI32, IRCompareBranch, IRConstI32, IRExit, IRJump, IRLabel, IRLocalI32,
+                 IRPrintI32, IRProgram, IRStoreI32, IRUnaryI32, IRValue, IRWrite)
 from .lexer import SecError
 from .native_x86_64 import emit_native
 from .parser import parse
@@ -249,8 +249,6 @@ def lower_to_ir(items):
         bindings = dict(outer_bindings)
         for stmt in block.stmts:
             if stmt.k == "Let":
-                if stmt.mut:
-                    _error("native subset accepts only immutable `let` bindings", stmt)
                 if stmt.name in bindings or stmt.name in constants or stmt.name in ("print", "println"):
                     _error(f"duplicate, reserved, or shadowed native binding `{stmt.name}`", stmt)
                 inferred = _expression_kind(stmt.init, bindings, constants)
@@ -258,13 +256,45 @@ def lower_to_ir(items):
                 if declared != inferred:
                     _error("native binding type does not match its initializer", stmt)
                 if declared == "str":
+                    if stmt.mut:
+                        _error("native subset supports mutable `i32` locals only", stmt)
                     value = _resolve_static_value(stmt.init, bindings, constants)
                     bindings[stmt.name] = value
                 else:
                     value = _lower_i32(stmt.init, bindings, constants, instructions, next_slot)
-                    bindings[stmt.name] = ("i32", value)
+                    if stmt.mut:
+                        dest = next_slot[0]
+                        next_slot[0] += 1
+                        instructions.append(IRLocalI32(dest, value))
+                        bindings[stmt.name] = ("i32", IRValue(dest), True)
+                    else:
+                        bindings[stmt.name] = ("i32", value)
             elif stmt.k == "ExprStmt" and stmt.e.k == "Call":
                 lower_print(stmt.e, bindings)
+            elif stmt.k == "ExprStmt" and stmt.e.k == "Assign":
+                assignment = stmt.e
+                if assignment.target.k != "Var":
+                    _error("native assignment target must be a local variable", assignment.target)
+                binding = bindings.get(assignment.target.name)
+                if binding is None or binding[0] != "i32" or len(binding) < 3 or binding[2] is not True:
+                    _error("native assignment requires a mutable `i32` local", assignment.target)
+                destination = binding[1]
+                if type(destination) is not IRValue:
+                    _error("invalid native mutable local slot", assignment.target)
+                if assignment.op == "=":
+                    source = _lower_i32(assignment.value, bindings, constants, instructions, next_slot)
+                else:
+                    compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
+                    if assignment.op not in compound_ops:
+                        _error("native mutable i32 supports only =, +=, -=, *=, /=, and %=", assignment)
+                    if _expression_kind(assignment.value, bindings, constants) != "i32":
+                        _error("native compound assignment requires an i32 value", assignment.value)
+                    right = _lower_i32(assignment.value, bindings, constants, instructions, next_slot)
+                    dest = next_slot[0]
+                    next_slot[0] += 1
+                    instructions.append(IRBinaryI32(dest, compound_ops[assignment.op], destination, right))
+                    source = IRValue(dest)
+                instructions.append(IRStoreI32(destination.slot, source))
             elif stmt.k == "ExprStmt" and stmt.e.k == "If":
                 lower_if(stmt.e, bindings)
             else:
