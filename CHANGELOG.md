@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — checked enum-to-integer casts
+
+- Route enum-to-integer casts through the runtime range check instead of a direct C cast, preventing silent narrowing and implementation-defined signed results.
+- Add regressions for valid enum values at i8/u8 boundaries and out-of-range values immediately beyond them.
+
 ## Unreleased — defined signed wrapping semantics
 
 - Convert wrapping arithmetic results and `as wrapping` casts through an explicit width-limited helper, avoiding out-of-range unsigned-to-signed C conversions.

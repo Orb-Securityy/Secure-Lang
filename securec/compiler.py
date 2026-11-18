@@ -1393,7 +1393,15 @@ class Compiler:
             return self.tmp("f64", f"(f64){c}"), to
         if t.k == "float" and to.k == "int":
             return self.tmp(to.name, f"SEC_CAST({to.name}, SEC_MIN_{to.name}, SEC_MAX_{to.name}, sec_f2i({c}, {L}), {L})"), to
-        if t.k in ("bool", "enum") and to.k == "int":
+        if t.k == "enum" and to.k == "int":
+            # Enum values are represented as i32, but narrowing them is still a
+            # checked Secure conversion. A direct C cast would silently wrap
+            # for unsigned targets or be implementation-defined for signed ones.
+            return self.tmp(
+                to.name,
+                f"SEC_CAST({to.name}, SEC_MIN_{to.name}, SEC_MAX_{to.name}, {c}, {L})",
+            ), to
+        if t.k == "bool" and to.k == "int":
             return self.tmp(to.name, f"({to.name}){c}"), to
         self.err(f"cannot cast `{tstr(t)}` to `{tstr(to)}`", n)
 
