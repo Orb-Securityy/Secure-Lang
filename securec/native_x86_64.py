@@ -42,12 +42,12 @@ def _emit_i32_formatter(code, value, newline, call_fixups):
     _patch_rel8(code, sign_branch, positive)
 
     code.extend(bytes.fromhex("488d74241f")) # lea rsi, [rsp + 31]
+    code.extend(bytes.fromhex("41b9"))
+    code.extend(bytes(4))                     # mov r9d, 0 (output length)
     if newline:
         code.extend(bytes.fromhex("c6060a"))     # mov byte [rsi], newline
         code.extend(bytes.fromhex("48ffce"))     # dec rsi
         code.extend(bytes.fromhex("41ffc1"))     # inc r9d
-    code.extend(bytes.fromhex("41b9"))
-    code.extend(bytes(4))                     # mov r9d, 0 (output length)
     loop_label = len(code)
     code.extend(bytes.fromhex("31d2"))       # xor edx, edx
     code.append(0xB9)
