@@ -256,6 +256,8 @@ class Compiler:
             t = self.rty(n.inner, selfty)
             if t.k == "ref":
                 self.err("references to references are not supported", n)
+            if t.k == "result" and n.mut:
+                self.err("mutable references to Result are not supported; handle Result values directly", n)
             return ref(t, n.mut)
         if k == "TSlice":
             self.err("unsized type `[T]` must be used behind a reference: `&[T]`", n)
@@ -2064,7 +2066,6 @@ class Compiler:
                 a = self.as_ref_form(a)
             plan.append((a, pt))
         cs = [None] * len(args)
-        mut_result_bindings = []
         for i, (a, pt) in enumerate(plan):           # phase 1: by-value arguments, left to right
             if pt.k != "ref":
                 c, t = self.expr(a, pt)
@@ -2087,15 +2088,6 @@ class Compiler:
         for i, (a, pt) in enumerate(plan):
             if pt.k == "ref":
                 cs[i] = self.form_ref(a, pt, ents)
-                # A mutable borrow may replace a Result without going through
-                # the direct-assignment checker. Require the current value to
-                # be handled first, then track the post-call value as pending.
-                if pt.name == "mut" and a.k == "Ref" and a.e.k == "Var":
-                    v = self.lookup(a.e.name)
-                    if v is not None and v.ty.k == "result":
-                        if v in self.unused_results:
-                            self.err(f"cannot mutably borrow unhandled Result binding {v.name}; handle it before the call", a)
-                        mut_result_bindings.append(v)
         self.check_conflicts(ents, n)
         # Only now is the call guaranteed to execute: if a later argument
         # returned early, all previously created owned temporaries remain live
@@ -2103,7 +2095,6 @@ class Compiler:
         for c, (_, _, pt) in zip(cs, params):
             if pt.k != "ref" and self.needs_drop(pt):
                 self.take_temp(c)
-        self.unused_results.update(mut_result_bindings)
         return cs
 
     def emit_call(self, sig, cs, n):
