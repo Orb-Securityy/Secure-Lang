@@ -116,10 +116,34 @@ class Compiler:
         return f'"{filename}:{n.line}:{n.col}"'
 
     # ------------------------------------------------------------- type layer
+    def contains_result(self, t, seen=None):
+        """Whether a type contains a Result value at any depth."""
+        if t.k == "result":
+            return True
+        if t.k == "struct":
+            seen = set() if seen is None else seen
+            if t.name in seen:
+                return False
+            info = self.structs.get(t.name)
+            if info is None or info["fields"] is None:
+                return False
+            next_seen = seen | {t.name}
+            return any(self.contains_result(ft, next_seen) for _, ft in info["fields"])
+        return any(self.contains_result(arg, seen) for arg in t.args)
+
     def storable(self, t, n):
         if has_ref(t):
             self.err("references are second-class in Secure: they may be passed as call arguments but not stored "
                      "in variables, fields or collections, nor returned", n)
+        # A top-level Result is trackable as a binding. Nested Results are not:
+        # the current flow checker cannot associate a must-use obligation with
+        # an Option/Vec/Task/array/struct payload.
+        if t.k == "result":
+            nested = any(self.contains_result(arg) for arg in t.args)
+        else:
+            nested = self.contains_result(t)
+        if nested:
+            self.err("nested Result values are not supported; keep each Result in a direct binding", n)
         return t
 
     def const_type_hint(self, n):
@@ -200,10 +224,29 @@ class Compiler:
                 if selfty is None:
                     self.err("`Self` is only valid inside `impl`", n)
                 return selfty
-            if nm == "Vec": need(1); return vec(self.storable(a[0], n))
-            if nm == "Option": need(1); return option(self.storable(a[0], n))
-            if nm == "Result": need(2); return result(self.storable(a[0], n), self.storable(a[1], n))
-            if nm == "Task": need(1); return task(self.storable(a[0], n))
+            if nm == "Vec":
+                need(1)
+                el = self.storable(a[0], n)
+                if self.contains_result(el):
+                    self.err("Result values cannot be stored in Vec<T>; handle them as direct bindings", n)
+                return vec(el)
+            if nm == "Option":
+                need(1)
+                el = self.storable(a[0], n)
+                if self.contains_result(el):
+                    self.err("Result values cannot be stored in Option<T>; handle them as direct bindings", n)
+                return option(el)
+            if nm == "Result":
+                need(2)
+                if any(self.contains_result(arg) for arg in a):
+                    self.err("a Result cannot contain another Result; handle each value directly", n)
+                return result(self.storable(a[0], n), self.storable(a[1], n))
+            if nm == "Task":
+                need(1)
+                el = self.storable(a[0], n)
+                if self.contains_result(el):
+                    self.err("Task<Result<...>> is not supported; join into a direct binding and handle the result", n)
+                return task(el)
             if nm in self.structs: need(0); return struct(nm)
             if nm in self.enums: need(0); return enum(nm)
             self.err(f"unknown type `{nm}`", n)
@@ -218,6 +261,8 @@ class Compiler:
             self.err("unsized type `[T]` must be used behind a reference: `&[T]`", n)
         if k == "TArr":
             el = self.storable(self.rty(n.elem, selfty), n)
+            if self.contains_result(el):
+                self.err("Result values cannot be stored in arrays; handle them as direct bindings", n)
             size = self.cval(n.size, "usize")
             if size is None:
                 self.err("array length must be a constant integer expression", n.size)
@@ -270,9 +315,11 @@ class Compiler:
 
     def needs_drop(self, t):
         k = t.k
+        # Result is affine even when its payloads are otherwise copyable.
+        if k == "result": return True
         if k in ("string", "vec", "task"): return True
         if k == "struct": return any(self.needs_drop(ft) for _, ft in self.structs[t.name]["fields"])
-        if k in ("option", "result", "array"): return any(self.needs_drop(a) for a in t.args)
+        if k in ("option", "array"): return any(self.needs_drop(a) for a in t.args)
         return False
 
     def is_copy(self, t):
@@ -578,6 +625,12 @@ class Compiler:
                 fields.append((fname, self.storable(self.rty(tn, struct(name)), tn)))
             info["fields"] = fields
         self.resolving_struct_fields = False
+        # Reject Result fields, including Results hidden inside another user
+        # struct, rather than losing their must-use obligation at aggregate drop.
+        for name, info in self.structs.items():
+            for fname, field_ty in info["fields"]:
+                if self.contains_result(field_ty):
+                    self.err(f"struct field {name}.{fname} cannot contain a Result; keep it as a direct binding", info["node"])
         self.check_cycles()
         # Array limits are checked only after every user struct has a resolved
         # layout. That lets a legal Vec-indirected recursive array element refer
@@ -1822,6 +1875,8 @@ class Compiler:
 
     def array_type(self, el, cnt, n):
         el = self.storable(el, n)
+        if self.contains_result(el):
+            self.err("Result values cannot be stored in arrays; handle them as direct bindings", n)
         if cnt * self.tsize(el) > MAX_ARRAY_BYTES:
             self.err("array too large for the stack (limit 1 MiB); use `Vec<T>`", n)
         return array(el, cnt)
@@ -2009,6 +2064,7 @@ class Compiler:
                 a = self.as_ref_form(a)
             plan.append((a, pt))
         cs = [None] * len(args)
+        mut_result_bindings = []
         for i, (a, pt) in enumerate(plan):           # phase 1: by-value arguments, left to right
             if pt.k != "ref":
                 c, t = self.expr(a, pt)
@@ -2031,6 +2087,15 @@ class Compiler:
         for i, (a, pt) in enumerate(plan):
             if pt.k == "ref":
                 cs[i] = self.form_ref(a, pt, ents)
+                # A mutable borrow may replace a Result without going through
+                # the direct-assignment checker. Require the current value to
+                # be handled first, then track the post-call value as pending.
+                if pt.name == "mut" and a.k == "Ref" and a.e.k == "Var":
+                    v = self.lookup(a.e.name)
+                    if v is not None and v.ty.k == "result":
+                        if v in self.unused_results:
+                            self.err(f"cannot mutably borrow unhandled Result binding {v.name}; handle it before the call", a)
+                        mut_result_bindings.append(v)
         self.check_conflicts(ents, n)
         # Only now is the call guaranteed to execute: if a later argument
         # returned early, all previously created owned temporaries remain live
@@ -2038,6 +2103,7 @@ class Compiler:
         for c, (_, _, pt) in zip(cs, params):
             if pt.k != "ref" and self.needs_drop(pt):
                 self.take_temp(c)
+        self.unused_results.update(mut_result_bindings)
         return cs
 
     def emit_call(self, sig, cs, n):
@@ -2077,6 +2143,8 @@ class Compiler:
             c, t = self.expr(n.args[0], expected.args[0] if expected is not None and expected.k == "option" else None)
             if t.k == "never":
                 return None, t
+            if self.contains_result(t):
+                self.err("Result values cannot be wrapped in Option; handle them as direct bindings", n)
             ot = option(self.storable(t, n))
             ct = self.ctype(ot)
             result = self.tmp(ct, f"({ct}){{.some = true, .v = {c}}}")
@@ -2501,6 +2569,8 @@ class Compiler:
                 self.err("a spawned function may only take owned, thread-safe values: no references or raw pointers", n)
         if sig.unsafe or self.contains_raw_pointer(sig.ret):
             self.err("a spawned function must be safe and must not return raw pointers", n)
+        if self.contains_result(sig.ret):
+            self.err("a spawned function cannot return a Result; join into a direct binding and handle it", n)
         if self.has_unsafe_effect(sig):
             self.err("a spawned function's call graph contains an unsafe operation; thread-safety cannot be guaranteed", n)
         cs = self.lower_args(sig.params, n.args[1:], n)
