@@ -251,13 +251,66 @@ def lower_to_ir(items):
         right = _lower_i32(cond.r, bindings, constants, instructions, next_slot)
         instructions.append(IRCompareBranch(left, cond.op, right, body_label, end_label))
         instructions.append(IRLabel(body_label))
-        loop_stack.append((cond_label, end_label))
+        loop_stack.append([cond_label, end_label, False])
         body_terminates = lower_block(node.body, bindings)
         loop_stack.pop()
         if not body_terminates:
             instructions.append(IRJump(cond_label))
         instructions.append(IRLabel(end_label))
         return False  # the condition may be false on entry or on a later iteration
+    def lower_for(node, bindings):
+        if node.var in bindings or node.var in constants or node.var in ("print", "println"):
+            _error(f"duplicate, reserved, or shadowed native loop variable `{node.var}`", node)
+        if (_expression_kind(node.lo, bindings, constants) != "i32"
+                or _expression_kind(node.hi, bindings, constants) != "i32"):
+            _error("native for bounds must be i32 values", node)
+        lower = _lower_i32(node.lo, bindings, constants, instructions, next_slot)
+        upper = _lower_i32(node.hi, bindings, constants, instructions, next_slot)
+
+        counter_slot = next_slot[0]
+        next_slot[0] += 1
+        instructions.append(IRLocalI32(counter_slot, lower))
+        limit_slot = next_slot[0]
+        next_slot[0] += 1
+        instructions.append(IRLocalI32(limit_slot, upper))
+        counter = IRValue(counter_slot)
+        limit = IRValue(limit_slot)
+
+        cond_label = new_label()
+        body_label = new_label()
+        step_label = new_label()
+        end_label = new_label()
+        instructions.append(IRLabel(cond_label))
+        instructions.append(IRCompareBranch(counter, "<=" if node.incl else "<", limit, body_label, end_label))
+        instructions.append(IRLabel(body_label))
+        body_bindings = dict(bindings)
+        body_bindings[node.var] = ("i32", counter)
+        frame = [step_label, end_label, False]
+        loop_stack.append(frame)
+        body_terminates = lower_block(node.body, body_bindings)
+        loop_stack.pop()
+
+        # If every body path breaks, no continue edge or fall-through can reach the step block.
+        if body_terminates and not frame[2]:
+            instructions.append(IRLabel(end_label))
+            return
+        if not body_terminates:
+            instructions.append(IRJump(step_label))
+        instructions.append(IRLabel(step_label))
+        if node.incl:
+            # Exit at the inclusive upper endpoint before attempting endpoint + 1.
+            increment_label = new_label()
+            instructions.append(IRCompareBranch(counter, "==", limit, end_label, increment_label))
+            instructions.append(IRLabel(increment_label))
+        one_slot = next_slot[0]
+        next_slot[0] += 1
+        instructions.append(IRConstI32(one_slot, 1))
+        sum_slot = next_slot[0]
+        next_slot[0] += 1
+        instructions.append(IRBinaryI32(sum_slot, "+", counter, IRValue(one_slot)))
+        instructions.append(IRStoreI32(counter_slot, IRValue(sum_slot)))
+        instructions.append(IRJump(cond_label))
+        instructions.append(IRLabel(end_label))
     def lower_print(call, bindings):
         if call.fn.k != "Var" or call.fn.name not in ("print", "println"):
             _error("native subset supports only `print` and `println`", call)
@@ -274,7 +327,7 @@ def lower_to_ir(items):
             instructions.append(IRWrite(b"", True))
 
     def lower_block(block, outer_bindings):
-        if block.tail is not None and block.tail.k not in ("If", "While"):
+        if block.tail is not None and block.tail.k not in ("If", "While", "For"):
             _error("native blocks only support `if` and `while` as tail expressions", block)
         bindings = dict(outer_bindings)
         terminated = False
@@ -334,11 +387,15 @@ def lower_to_ir(items):
                     break
             elif stmt.k == "ExprStmt" and stmt.e.k == "While":
                 lower_while(stmt.e, bindings)
+            elif stmt.k == "ExprStmt" and stmt.e.k == "For":
+                lower_for(stmt.e, bindings)
             elif stmt.k == "ExprStmt" and stmt.e.k in ("Break", "Continue"):
                 if not loop_stack:
-                    _error("native `break`/`continue` must appear inside a `while` loop", stmt.e)
-                cond_label, end_label = loop_stack[-1]
-                instructions.append(IRJump(end_label if stmt.e.k == "Break" else cond_label))
+                    _error("native `break`/`continue` must appear inside a loop", stmt.e)
+                continue_label, end_label, _ = loop_stack[-1]
+                if stmt.e.k == "Continue":
+                    loop_stack[-1][2] = True
+                instructions.append(IRJump(end_label if stmt.e.k == "Break" else continue_label))
                 terminated = True
                 if stmt_index != len(block.stmts) - 1 or block.tail is not None:
                     _error("unreachable statement after `break`/`continue`", stmt)
@@ -348,8 +405,10 @@ def lower_to_ir(items):
         if not terminated and block.tail is not None:
             if block.tail.k == "If":
                 terminated = lower_if(block.tail, bindings)
-            else:
+            elif block.tail.k == "While":
                 terminated = lower_while(block.tail, bindings)
+            else:
+                lower_for(block.tail, bindings)
         return terminated
 
     lower_block(main.body, {})
