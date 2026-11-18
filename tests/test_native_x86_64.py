@@ -949,11 +949,11 @@ class NativeX8664Tests(unittest.TestCase):
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_stack_passed_arguments_and_nested_call_alignment_execute(self):
         source = (
-            'fn sum8(a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32) -> i32 {\\n'
-            '    println(a, b, c, d, e, f, g, h);\\n'
-            '    return a + b + c + d + e + f + g + h;\\n'
-            '}\\n'
-            'fn relay(value: i32) -> i32 { return sum8(value, 2, 3, 4, 5, 6, 7, 8); }\\n'
+            'fn sum8(a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32) -> i32 {\n'
+            '    println(a, b, c, d, e, f, g, h);\n'
+            '    return a + b + c + d + e + f + g + h;\n'
+            '}\n'
+            'fn relay(value: i32) -> i32 { return sum8(value, 2, 3, 4, 5, 6, 7, 8); }\n'
             'fn main() { let mut result: i32 = relay(1); result += 1; println(result); }'
         )
         image = compile_native_subset(source)
@@ -964,7 +964,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'12345678\\n37\\n')
+        self.assertEqual(result.stdout, b'12345678\n37\n')
 
     def test_native_functions_reject_bad_signatures_and_missing_returns(self):
         unsupported = [
@@ -975,7 +975,8 @@ class NativeX8664Tests(unittest.TestCase):
             'fn bad() -> i32 { return "wrong"; } fn main() {}',
             'fn main() { let x: i32 = bad(1); } fn bad() -> i32 { return 1; }',
             'fn bad() -> i32 { return 1; } fn main() { println(bad(1)); }',
-            'fn bad(a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32) -> i32 { return a; } fn main() {}',
+            ("fn bad(" + ", ".join(f"p{i}: i32" for i in range(33)) +
+             ") -> i32 { return p0; } fn main() {}"),
             'fn bad() -> i32 { return 1; } fn bad() -> i32 { return 2; } fn main() {}',
         ]
         for source in unsupported:
