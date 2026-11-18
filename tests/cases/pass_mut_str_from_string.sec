@@ -1,0 +1,11 @@
+// EXPECT-OUT: false
+// Mutable str reborrows are valid when the data comes from an owned String.
+fn wipe(value: &mut str) {
+    zeroize(value.as_mut_slice());
+}
+fn main() -> i32 {
+    let mut value = String::from("secret");
+    wipe(&mut value);
+    println(str_eq(&value, "secret"));
+    return 0;
+}
