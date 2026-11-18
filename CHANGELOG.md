@@ -1,35 +1,13 @@
 # Changelog
 
-## Unreleased — exhaustive wrapping property tests
+## 0.1.22 — ABI, conversion, and ownership hardening
 
-- Exhaust all signed and unsigned 8-bit operand pairs for wrapping addition, subtraction, and multiplication against independent modular reference models.
-- Exercise signed and unsigned 8-bit wrapping conversions across every 16-bit source pattern, with UBSan enabled.
-- Cover wrapping addition, subtraction, multiplication, and explicit `as wrapping` casts at signed 8/16/32/64-bit boundaries.
-
-## Unreleased — checked enum-to-integer casts
-
-- Route enum-to-integer casts through the runtime range check instead of a direct C cast, preventing silent narrowing and implementation-defined signed results.
-- Add regressions for valid enum values at i8/u8 boundaries and out-of-range values immediately beyond them.
-
-## Unreleased — defined signed wrapping semantics
-
-- Convert wrapping arithmetic results and `as wrapping` casts through an explicit width-limited helper, avoiding out-of-range unsigned-to-signed C conversions.
-- Add boundary regressions for signed 8/16/32/64-bit wrapping arithmetic and signed/unsigned wrapping casts.
-
-## Unreleased — immutable str mutation regression coverage
-
-- Add compile-fail cases for indexed writes through mutable `str` bindings, mutable struct fields, and mutable borrows of `str` fields.
-
-## Unreleased — references cannot hide behind raw pointers
-
-- Reject raw pointer types whose pointee recursively contains a second-class reference, keeping reference values confined to direct call arguments.
-- Add a compile-fail regression for a function parameter of type `*const &T`.
-
-## Unreleased — target ABI contract
-
-- Enforce 8-bit bytes, exact integer sizes, 1-byte `bool`, 8-byte `f64`, the 64-bit `usize`/pointer model, and the scalar/`pthread_t` alignment assumptions used by conservative stack-size accounting.
-- Fail compilation on unsupported target ABIs instead of silently compiling with mismatched size/range assumptions.
-
+- Enforce the actual target ABI assumed by the compiler: 8-bit bytes, exact integer widths, 1-byte bool, 8-byte f64, full-range 64-bit usize/pointers, scalar alignment limits, and pthread layout bounds.
+- Reject references hidden behind raw pointer types, preserving the rule that references exist only as direct call arguments.
+- Reject mutable writes and borrows through immutable str literals, constants, views, and struct fields while preserving mutable access through owned String storage.
+- Range-check enum-to-integer conversions instead of relying on unchecked C casts.
+- Define wrapping arithmetic and wrapping casts through width-limited helpers, avoiding out-of-range unsigned-to-signed C conversions.
+- Add exhaustive i8/u8 wrapping arithmetic and conversion property checks under UBSan, plus signed-width, enum-cast, immutable-string, and ABI regressions.
 ## 0.1.21 — call ordering and backend arithmetic hardening
 
 - Enforce the documented three-phase call argument order: evaluate by-value arguments, evaluate every reference-place expression, then form borrowed pointers.
