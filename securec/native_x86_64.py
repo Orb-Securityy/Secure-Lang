@@ -12,7 +12,7 @@ from .ir import (IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit, IR
 
 ELF_BASE = 0  # position-independent image; Linux chooses the load base
 CODE_OFFSET = 0x1000
-DATA_OFFSET = 0x2000
+MAX_NATIVE_CODE = 1 << 20
 MAX_STACK_FRAME = 1 << 20
 SYSV_INTEGER_ARGUMENT_REGISTERS = 6
 
@@ -385,20 +385,30 @@ def _emit_program_code(ir):
             raise ValueError("native branch targets an unknown code label")
         _patch_rel32(code, position, target)
 
+    if len(code) > MAX_NATIVE_CODE:
+        raise ValueError("native code exceeds the 1 MiB limit")
+    if len(rodata) > MAX_OUTPUT:
+        raise ValueError("native data exceeds the 1 MiB limit")
+    code_segment_size = CODE_OFFSET + len(code)
+    data_segment_offset = (code_segment_size + 0xFFF) & ~0xFFF
     for position, data_offset in lea_fixups:
-        target = ELF_BASE + DATA_OFFSET + data_offset
+        target = ELF_BASE + data_segment_offset + data_offset
         next_ip = ELF_BASE + CODE_OFFSET + position + 4
         code[position:position + 4] = struct.pack("<i", target - next_ip)
 
-    if len(code) > DATA_OFFSET - CODE_OFFSET:
-        raise ValueError("native code exceeds the first backend page")
-    if len(rodata) > MAX_OUTPUT:
-        raise ValueError("native data exceeds the 1 MiB limit")
-    return bytes(code), bytes(rodata)
+    return bytes(code), bytes(rodata), data_segment_offset
 
-def _write_elf64(code, data):
-    """Write a static PIE (ET_DYN) with RX code, R-only data, and an RW non-exec stack."""
+
+def _write_elf64(code, data, data_segment_offset):
+    """Write a static PIE with RX code, optional R data, and an RW/NX stack."""
+    if type(code) is not bytes or type(data) is not bytes:
+        raise ValueError("native ELF segments must be immutable byte strings")
+    if len(code) > MAX_NATIVE_CODE or len(data) > MAX_OUTPUT:
+        raise ValueError("native ELF segment exceeds its configured size limit")
     code_segment_size = CODE_OFFSET + len(code)
+    expected_data_offset = (code_segment_size + 0xFFF) & ~0xFFF
+    if type(data_segment_offset) is not int or data_segment_offset != expected_data_offset:
+        raise ValueError("native ELF data segment offset is not page-aligned after code")
     ident = b"\x7fELF" + bytes((2, 1, 1, 0, 0)) + bytes(7)
     program_headers = [
         struct.pack("<IIQQQQQQ", 1, 5, 0, ELF_BASE, ELF_BASE,
@@ -406,8 +416,8 @@ def _write_elf64(code, data):
     ]
     if data:
         program_headers.append(struct.pack(
-            "<IIQQQQQQ", 1, 4, DATA_OFFSET, ELF_BASE + DATA_OFFSET, ELF_BASE + DATA_OFFSET,
-            len(data), len(data), 0x1000,
+            "<IIQQQQQQ", 1, 4, data_segment_offset, ELF_BASE + data_segment_offset,
+            ELF_BASE + data_segment_offset, len(data), len(data), 0x1000,
         ))
     program_headers.append(struct.pack("<IIQQQQQQ", 0x6474E551, 6, 0, 0, 0, 0, 0, 16))
     ehdr = ident + struct.pack(
@@ -419,14 +429,14 @@ def _write_elf64(code, data):
         raise AssertionError("ELF headers exceed code offset")
     image = header + bytes(CODE_OFFSET - len(header)) + code
     if data:
-        if len(image) > DATA_OFFSET:
+        if len(image) > data_segment_offset:
             raise AssertionError("native code overlaps read-only data segment")
-        image += bytes(DATA_OFFSET - len(image)) + data
+        image += bytes(data_segment_offset - len(image)) + data
     return image
 
 
 def emit_native(ir):
     """Verify IR and directly emit a static x86-64 Linux ELF executable."""
     verify_ir(ir)
-    code, data = _emit_program_code(ir)
-    return _write_elf64(code, data)
+    code, data, data_segment_offset = _emit_program_code(ir)
+    return _write_elf64(code, data, data_segment_offset)
