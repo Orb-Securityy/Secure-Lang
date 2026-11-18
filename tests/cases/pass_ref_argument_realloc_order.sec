@@ -1,0 +1,20 @@
+// EXPECT-OUT: 7 5 8
+// All reference targets must be evaluated before any borrowed pointer is formed.
+fn grow_and_get_index(values: &mut Vec<i32>) -> usize {
+    values.push(99);
+    0usize
+}
+fn write_both(first: &mut i32, second: &mut i32) {
+    *first = 7;
+    *second = 8;
+}
+fn main() -> i32 {
+    let mut values: Vec<i32> = Vec::new();
+    for i in 0..4 {
+        values.push(i);
+    }
+    let mut other = [0i32; 1];
+    write_both(&mut values[0], &mut other[grow_and_get_index(&mut values)]);
+    println(values[0], " ", values.len(), " ", other[0]);
+    return 0;
+}
