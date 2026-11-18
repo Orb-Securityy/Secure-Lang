@@ -226,7 +226,7 @@ class NativeX8664Tests(unittest.TestCase):
         image = emit_native(ir)
         self.assertEqual(image[:4], b'\x7fELF')
         self.assertIsInstance(ir, IRProgram)
-        self.assertEqual(ir.instructions, (IRWrite(b"IR", True), IRExit(0)))
+        self.assertEqual(ir.instructions, (IRWrite(b"IR", False), IRWrite(b"", True), IRExit(0)))
     def test_native_backend_imports_without_frontend_modules(self):
         script = (
             'import sys; import securec.native_x86_64; '
