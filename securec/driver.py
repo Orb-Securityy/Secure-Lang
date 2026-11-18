@@ -8,7 +8,7 @@ import sys
 import tempfile
 from securec import VERSION
 from securec.lexer import SecError
-from securec.native_x86_64 import compile_native_subset
+from securec.native_lower import compile_native_subset
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MAX_NATIVE_SOURCE = 1 << 20
