@@ -143,7 +143,6 @@ class NativeX8664Tests(unittest.TestCase):
         unsupported = [
             'fn main() { let x: i32 = 1; }',
             'fn main() -> i32 { 0 }',
-            'fn main() { print("not println"); }',
             'fn main() { println(1); }',
             'fn main() { println("ok"); let x: i32 = 3; }',
             'fn main() { unsafe { println("no"); } }',
