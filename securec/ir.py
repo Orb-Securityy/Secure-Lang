@@ -20,6 +20,18 @@ class IRConstI32:
 
 
 @dataclass(frozen=True)
+class IRLocalI32:
+    dest: int
+    initial: IRValue
+
+
+@dataclass(frozen=True)
+class IRStoreI32:
+    dest: int
+    value: IRValue
+
+
+@dataclass(frozen=True)
 class IRUnaryI32:
     dest: int
     op: str
@@ -90,6 +102,7 @@ def verify_ir(ir):
     uses = [set() for _ in instructions]
     output_size = 0
     next_slot = 0
+    mutable_slots = set()
 
     for index, instruction in enumerate(instructions):
         if type(instruction) is IRLabel:
@@ -103,6 +116,21 @@ def verify_ir(ir):
                 raise ValueError("native i32 constant is out of range")
             definitions[index].add(instruction.dest)
             next_slot += 1
+        elif type(instruction) is IRLocalI32:
+            if type(instruction.dest) is not int or instruction.dest != next_slot:
+                raise ValueError("native IR slots must be defined once in increasing order")
+            if type(instruction.initial) is not IRValue or type(instruction.initial.slot) is not int:
+                raise ValueError("native mutable local requires an initialized i32 slot")
+            uses[index].add(instruction.initial.slot)
+            definitions[index].add(instruction.dest)
+            mutable_slots.add(instruction.dest)
+            next_slot += 1
+        elif type(instruction) is IRStoreI32:
+            if type(instruction.dest) is not int or instruction.dest not in mutable_slots:
+                raise ValueError("native IR may only assign to a declared mutable local")
+            if type(instruction.value) is not IRValue or type(instruction.value.slot) is not int:
+                raise ValueError("native mutable assignment requires an i32 slot reference")
+            uses[index].add(instruction.value.slot)
         elif type(instruction) is IRUnaryI32:
             if type(instruction.dest) is not int or instruction.dest != next_slot:
                 raise ValueError("native IR slots must be defined once in increasing order")
