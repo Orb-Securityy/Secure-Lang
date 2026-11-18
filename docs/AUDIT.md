@@ -8,8 +8,9 @@ because everything an auditor needs about a *program* is derivable without the c
 1. **`securec emit-c prog.sec`** — the full generated C (deterministic for the same source contents and source basename). Generated enum and method symbols and composite `Result<T, E>` C type names are unambiguous; panic-location strings C-escape the source basename. Auditors review
    and rebuild exactly what ships. Pair it with `securec/secure_rt.h` (the whole runtime, ~200 lines, shippable
    under NDA or publishable independently because it contains no compiler internals).
-2. **`securec audit prog.sec`** — JSON with the source SHA-256, every `unsafe` block, `unsafe fn` and `extern`
-   declaration with line numbers, and `safe_subset: true/false`. CI policy: fail the build when `safe_subset` is false
+2. **`securec audit prog.sec`** — JSON with the SHA-256 of the exact source-file bytes (computed before UTF-8 decoding
+   and newline normalization), every `unsafe` block, `unsafe fn` and `extern` declaration with line numbers, and
+   `safe_subset: true/false`. CI policy: fail the build when `safe_subset` is false
    unless the sites are reviewed; or compile with `--forbid-unsafe`.
 3. **Conformance suite** — `tests/cases` documents, executably, every guarantee (what must be rejected, what must
    trap). Customers can run it against the shipped `securec` binary to verify that the toolchain they received
