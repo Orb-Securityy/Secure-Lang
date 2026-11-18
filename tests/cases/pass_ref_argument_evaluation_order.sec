@@ -1,0 +1,20 @@
+// EXPECT-OUT: 1 11
+// Reference-place index expressions must execute after all by-value arguments.
+fn bump(counter: &mut i32) -> i32 {
+    *counter += 1;
+    *counter
+}
+fn choose_index(counter: &mut i32) -> usize {
+    *counter += 10;
+    0usize
+}
+fn write_at(slot: &mut i32, value: i32) {
+    *slot = value;
+}
+fn main() -> i32 {
+    let mut values = [0i32; 1];
+    let mut counter = 0;
+    write_at(&mut values[choose_index(&mut counter)], bump(&mut counter));
+    println(values[0], " ", counter);
+    return 0;
+}

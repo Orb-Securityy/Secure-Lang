@@ -1890,8 +1890,6 @@ class Compiler:
         for a, (pn, pm, pt) in zip(args, params):
             if pt.k == "ref":
                 a = self.as_ref_form(a)
-                if a.k == "Ref":
-                    self.prep_ref_target(a)
             plan.append((a, pt))
         cs = [None] * len(args)
         for i, (a, pt) in enumerate(plan):           # phase 1: by-value arguments, left to right
@@ -1904,7 +1902,16 @@ class Compiler:
                 if a.k == "Var" and not self.is_copy(pt):
                     ents.append((a.name, "move"))
                 cs[i] = c
-        for i, (a, pt) in enumerate(plan):           # phase 2: form pointers/slices (no user code runs after)
+        # Phase 2 evaluates every reference-place expression (including
+        # index and slice-bound expressions). Do this only after all by-value
+        # arguments, but before forming any pointer: a later reference target
+        # may call code that reallocates an earlier target's container.
+        for a, pt in plan:
+            if pt.k == "ref" and a.k == "Ref":
+                self.prep_ref_target(a)
+        # Phase 3 forms pointers only after all argument expressions have run;
+        # no user code is evaluated after this point.
+        for i, (a, pt) in enumerate(plan):
             if pt.k == "ref":
                 cs[i] = self.form_ref(a, pt, ents)
         self.check_conflicts(ents, n)
