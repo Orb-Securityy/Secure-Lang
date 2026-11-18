@@ -53,7 +53,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'1:2\\n')
+        self.assertEqual(result.stdout, b'1:2\n')
 
     def test_native_read_byte_is_reserved_and_rejects_arguments(self):
         for source in (
