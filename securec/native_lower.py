@@ -1,6 +1,5 @@
 """Python bootstrap lowering for the restricted static-string native subset."""
 from .ir import IRExit, IRProgram, IRWrite
-from .ir import ir_output
 from .lexer import SecError
 from .native_x86_64 import emit_native
 from .parser import parse
@@ -77,5 +76,4 @@ def compile_native_subset(source):
     except RecursionError as exc:
         raise SecError("source nesting exceeds the native backend limit", 0, 0) from exc
     ir = lower_to_ir(items)
-    ir_output(ir)
     return emit_native(ir)
