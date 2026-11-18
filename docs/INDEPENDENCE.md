@@ -101,11 +101,15 @@ The current repository does **not** satisfy the independence definition:
 - the CI workflow requires Python and GCC.
 
 These are architectural dependencies, not packaging issues. Each must be removed from the release path while preserving a temporary, auditable bootstrap boundary until self-hosting is established.
-### Phase D progress: Secure-written streaming lexer slice
+### Phase D progress: Secure-written lexer and expression parser experiments
 
-The branch now contains `examples/selfhost_lexer.sec`, a lexer component written in Secure source and compiled by the direct native bootstrap. Its `read_byte()` intrinsic enters the Linux `read(2)` syscall directly, consumes stdin one byte at a time, returns 0..255 or -1 at EOF, retries `EINTR`, and fails closed on other I/O errors. The example recognizes ASCII identifiers, decimal digit runs, escaped double-quoted strings, whitespace, line comments, nested block comments, and printable ASCII punctuation. It reports token kinds and byte spans, not an AST.
+The branch contains `examples/selfhost_lexer.sec`, a lexer component written in Secure source and compiled by the direct native bootstrap. Its `read_byte()` intrinsic enters the Linux `read(2)` syscall directly, consumes stdin one byte at a time, returns 0..255 or -1 at EOF, retries `EINTR`, and fails closed on other I/O errors. The example recognizes ASCII identifiers, decimal digit runs, escaped double-quoted strings, whitespace, line comments, nested block comments, and printable ASCII punctuation. It reports token kinds and byte spans, not an AST.
 
-This is evidence that a Secure program can perform a real source-scanning task when compiled to the direct ELF backend. It is only a Phase D component, not a self-hosting frontend: it does not yet cover the complete lexical grammar, retain token text, produce a token array, parse syntax, type-check, run ownership/borrow analysis, or lower general Secure source into the IR. The Stage 0 Python lexer/parser/lowering remains responsible for building native executables. No bootstrap stage gate has been declared complete.
+The branch also contains `examples/selfhost_expr_parser.sec`, a bounded shunting-yard arithmetic parser written in Secure itself. It reads at most 256 bytes into a fixed array, uses fixed value/operator stacks, honors precedence and parentheses for decimal i32 expressions using `+ - * / %`, and rejects malformed input and division by zero. This parser handles an arithmetic-expression grammar, not Secure source files.
+
+The native frontend now exposes bounded stack arrays `[i32; N]` and `[u8; N]` with repeated initialization, checked indexed reads/writes, and runtime range enforcement. Its explicit limits are 32 arrays, 65,536 elements per array, and 64 KiB aggregate array storage per function. These arrays are fixed-size stack storage; heap allocation, Vec/String, and array parameters remain unsupported.
+
+These artifacts prove that a Secure program can perform source scanning and parse a small expression grammar when compiled to the direct ELF backend. They are only Phase D components, not a self-hosting frontend: the lexer does not cover the complete lexical grammar or retain token text, and the expression parser does not parse Secure declarations/statements, type-check, run ownership/borrow analysis, or lower general Secure source into the IR. The Stage 0 Python lexer/parser/lowering remains responsible for building native executables. No bootstrap stage gate has been declared complete.
 
 ## 8. Prototype status
 
