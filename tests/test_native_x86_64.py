@@ -1108,6 +1108,10 @@ class NativeX8664Tests(unittest.TestCase):
             ("fn bad(" + ", ".join(f"p{i}: i32" for i in range(33)) +
              ") -> i32 { return p0; } fn main() {}"),
             'fn bad() -> i32 { return 1; } fn bad() -> i32 { return 2; } fn main() {}',
+            'fn bad(print: i32) -> i32 { return print; } fn main() {}',
+            'fn bad(println: i32) -> i32 { return println; } fn main() {}',
+            'fn add(value: i32) -> i32 { return value; } fn bad(add: i32) -> i32 { return add; } fn main() {}',
+            'const VALUE: i32 = 1; fn bad(VALUE: i32) -> i32 { return VALUE; } fn main() {}',
         ]
         for source in unsupported:
             with self.subTest(source=source):
