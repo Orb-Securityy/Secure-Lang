@@ -18,11 +18,14 @@ bin/securec build prog.sec -o prog  # native executable (hardened flags)
 bin/securec check prog.sec          # type/ownership/borrow check only
 bin/securec emit-c prog.sec         # inspect the generated C (deterministic)
 bin/securec audit prog.sec          # JSON: source SHA-256, every unsafe/extern site
+bin/securec native-build examples/native_hello.sec -o hello  # experimental x86-64 Linux ELF subset
   flags: --forbid-unsafe  --sanitize (ASan/UBSan/LSan)  -O0..-O3  --strict-cc
 python3 tests/run_tests.py          # conformance: normal + ASan/UBSan/LSan
 python3 -m unittest discover -s tests -p 'test_*.py'  # compiler/driver properties
 python3 tests/run_analyzer.py       # GCC -fanalyzer on generated C
 python tests/fuzz_frontend.py -atheris_runs=30000  # optional Atheris campaign
+
+`native-build` is an experimental bootstrap path: it accepts only a `main` function containing string-literal `println` statements and writes a static x86-64 Linux ELF directly. It does not invoke GCC, an assembler, or a linker. The driver/frontend is still Python, and this restricted path is **not** the normal compiler or a self-hosted release.
 python3 bench/run_bench.py          # performance vs unchecked C
 ```
 
