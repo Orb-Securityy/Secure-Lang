@@ -1,4 +1,4 @@
-// EXPECT-ERR: cannot mutably borrow unhandled Result binding value
+// EXPECT-ERR: mutable references to Result are not supported
 fn overwrite(value: &mut Result<i32, i32>) {
     *value = Ok(8);
 }
