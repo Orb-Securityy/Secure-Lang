@@ -319,6 +319,77 @@ class NativeX8664Tests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_for_exclusive_and_inclusive_ranges_execute(self):
+        source = (
+            'fn main() {\n'
+            '    let mut total: i32 = 0;\n'
+            '    for i in 1..5 { total += i; }\n'
+            '    for j in 5..=7 { total += j; }\n'
+            '    println(total);\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'for-ranges')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'33\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_for_inclusive_i32_max_does_not_overflow(self):
+        source = 'fn main() { for i in 2147483647..=2147483647 { println(i); } }'
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'inclusive-max')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'2147483647\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_for_supports_continue_break_and_nested_loops(self):
+        source = (
+            'fn main() {\n'
+            '    let mut total: i32 = 0;\n'
+            '    for outer in 0..4 {\n'
+            '        if outer == 1 { continue; }\n'
+            '        for inner in 0..5 {\n'
+            '            if inner == 3 { break; }\n'
+            '            total += 1;\n'
+            '        }\n'
+            '    }\n'
+            '    println(total);\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'for-control')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'9\n')
+
+    def test_native_for_rejects_non_i32_bounds_and_mutable_loop_variable(self):
+        unsupported = [
+            'fn main() { for i in "a"..2 { println(i); } }',
+            'fn main() { for i in 0..2 { i += 1; } }',
+            'fn main() { let mut i: i32 = 0; for i in 0..2 { println(i); } }',
+        ]
+        for source in unsupported:
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_break_and_continue_skip_and_exit_current_loop(self):
         source = (
             'fn main() {\n'
