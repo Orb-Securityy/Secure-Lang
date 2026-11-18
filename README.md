@@ -23,6 +23,7 @@ python3 tests/run_tests.py          # conformance: normal + ASan/UBSan/LSan
 python3 -m unittest discover -s tests -p 'test_*.py'  # compiler/driver properties
 python3 tests/run_analyzer.py       # GCC -fanalyzer on generated C
 python tests/fuzz_frontend.py -atheris_runs=30000  # optional Atheris campaign
+python tests/fuzz_native.py tests/native_fuzz_corpus -atheris_runs=50000  # native IR/ELF fuzzing
 python3 bench/run_bench.py          # performance vs unchecked C
 ```
 
