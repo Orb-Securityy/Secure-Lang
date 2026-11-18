@@ -42,7 +42,7 @@ const N: usize = 4 * 1024;  // integer / f64 / bool / str literal constants, fol
 `match` supports literals, `|` alternatives (literals/enum variants), `_`, bindings, enum variants `E::A`,
 `Some(x) None Ok(x) Err(e)`; it must be **exhaustive**.
 `e?` propagates `Err`/`None` out of the enclosing function (it must return a compatible `Result`/`Option`).
-`x as T` is a **checked** conversion (panics if the value does not fit); `x as wrapping T` truncates explicitly.
+`x as T` is a **checked** conversion (panics if the value does not fit), including enum-to-integer casts; `x as wrapping T` keeps the low destination bits with defined two's-complement decoding.
 `wrapping_{add,sub,mul}` use defined modulo-2^N arithmetic (signed results use two's-complement interpretation); `saturating_{add,sub,mul}` clamp to the type's range; `checked_{add,sub,mul}` return `Option`. These make overflow intent explicit.
 
 ### Integer semantics
