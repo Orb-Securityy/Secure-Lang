@@ -95,7 +95,7 @@ class NativeX8664Tests(unittest.TestCase):
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_code_spans_multiple_pages_before_read_only_data(self):
         repeats = 300
-        source = 'fn main() {\\n' + '    println("X");\\n' * repeats + '}'
+        source = 'fn main() {\n' + '    println("X");\n' * repeats + '}'
         image = compile_native_subset(source)
         phoff = struct.unpack_from('<Q', image, 32)[0]
         phentsize, phnum = struct.unpack_from('<HH', image, 54)
@@ -118,7 +118,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'X\\n' * repeats)
+        self.assertEqual(result.stdout, b'X\n' * repeats)
 
     def test_native_machine_code_has_eintr_and_partial_write_branches(self):
         image = compile_native_subset('fn main() { println("retry"); }')
