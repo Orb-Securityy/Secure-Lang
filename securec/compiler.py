@@ -1324,9 +1324,14 @@ class Compiler:
             self.err(f"`{n.op}` needs `bool` operands, found `{tstr(lt)}`", n.l)
         r = self.tmp("bool", lc)
         s0 = self.snap()
+        # The right operand is conditional: short-circuiting may skip every
+        # side effect in it. A Result consumed only on the RHS therefore
+        # remains unhandled on the path where the RHS is not evaluated.
+        results0 = set(self.unused_results)
         self.emit(f"if ({'' if n.op == '&&' else '!'}{r}) {{")
         mark = len(self.stmt_temps)
         rc, rt = self.expr(n.r, BOOL)
+        results1 = set(self.unused_results)
         if rt.k != "never":
             if rt != BOOL:
                 self.err(f"`{n.op}` needs `bool` operands, found `{tstr(rt)}`", n.r)
@@ -1334,6 +1339,7 @@ class Compiler:
         self.drop_temps(mark)
         self.emit("}")
         self.moved = self.merge(self.snap() if self.moved is not None else s0, s0)
+        self.unused_results = self.merge_pending_results(results0, results1)
         return r, BOOL
 
     # ---- assignment
