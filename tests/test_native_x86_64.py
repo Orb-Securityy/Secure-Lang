@@ -9,8 +9,9 @@ import unittest
 from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
-from securec.native_x86_64 import (MAX_OUTPUT, IRExit, IRProgram, IRWrite,
-                                  compile_native_subset, lower_to_ir, verify_ir)
+from securec.ir import MAX_OUTPUT, IRExit, IRProgram, IRWrite, verify_ir
+from securec.native_lower import compile_native_subset, lower_to_ir
+from securec.native_x86_64 import emit_native
 
 
 class NativeX8664Tests(unittest.TestCase):
@@ -147,8 +148,19 @@ class NativeX8664Tests(unittest.TestCase):
             verify_ir(ir)
     def test_native_ir_is_immutable_and_typed(self):
         ir = lower_to_ir(parse('fn main() { println("IR"); }'))
+        image = emit_native(ir)
+        self.assertEqual(image[:4], b'\x7fELF')
         self.assertIsInstance(ir, IRProgram)
         self.assertEqual(ir.instructions, (IRWrite(b"IR", True), IRExit(0)))
+    def test_native_backend_imports_without_frontend_modules(self):
+        script = (
+            'import sys; import securec.native_x86_64; '
+            + 'assert "securec.parser" not in sys.modules; '
+            + 'assert "securec.lexer" not in sys.modules; '
+            + 'assert "securec.compiler" not in sys.modules'
+        )
+        result = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
     def test_native_build_does_not_import_legacy_c_compiler(self):
         with tempfile.TemporaryDirectory() as directory:
             source = os.path.join(directory, 'isolated.sec')
