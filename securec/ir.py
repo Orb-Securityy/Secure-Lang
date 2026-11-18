@@ -11,6 +11,9 @@ MAX_NATIVE_ARGS = 32
 MAX_NATIVE_FUNCTIONS = 128
 MAX_NATIVE_CONSTANTS = 512
 MAX_NATIVE_INSTRUCTIONS = 2048
+MAX_NATIVE_ARRAYS = 32
+MAX_NATIVE_ARRAY_LENGTH = 65536
+MAX_NATIVE_ARRAY_BYTES = 1 << 16
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,29 @@ class IRLocalI32:
 @dataclass(frozen=True)
 class IRStoreI32:
     dest: int
+    value: IRValue
+
+
+@dataclass(frozen=True)
+class IRArrayCreate:
+    array_id: int
+    length: int
+    element_size: int
+    mutable: bool
+    initial: IRValue
+
+
+@dataclass(frozen=True)
+class IRArrayLoadI32:
+    dest: int
+    array_id: int
+    index: IRValue
+
+
+@dataclass(frozen=True)
+class IRArrayStoreI32:
+    array_id: int
+    index: IRValue
     value: IRValue
 
 
@@ -163,6 +189,10 @@ def verify_ir(ir):
         labels = {}
         definitions = [set() for _ in instructions]
         uses = [set() for _ in instructions]
+        array_definitions = [set() for _ in instructions]
+        array_uses = [set() for _ in instructions]
+        arrays = {}
+        array_bytes = 0
         next_slot = 0
         mutable_slots = set()
         expected_param = 0
@@ -210,6 +240,46 @@ def verify_ir(ir):
                 if type(instruction.value) is not IRValue or type(instruction.value.slot) is not int:
                     raise ValueError("native mutable assignment requires an i32 slot reference")
                 uses[index].update((instruction.dest, instruction.value.slot))
+            elif type(instruction) is IRArrayCreate:
+                non_param_seen = True
+                if (type(instruction.array_id) is not int or instruction.array_id != len(arrays)
+                        or type(instruction.length) is not int or not 1 <= instruction.length <= MAX_NATIVE_ARRAY_LENGTH
+                        or type(instruction.element_size) is not int or instruction.element_size not in (1, 4)
+                        or type(instruction.mutable) is not bool
+                        or type(instruction.initial) is not IRValue
+                        or type(instruction.initial.slot) is not int):
+                    raise ValueError("invalid native fixed-array declaration")
+                array_bytes += instruction.length * instruction.element_size
+                if len(arrays) + 1 > MAX_NATIVE_ARRAYS or array_bytes > MAX_NATIVE_ARRAY_BYTES:
+                    raise ValueError("native fixed arrays exceed their count or stack-byte budget")
+                arrays[instruction.array_id] = (
+                    instruction.length, instruction.element_size, instruction.mutable
+                )
+                array_definitions[index].add(instruction.array_id)
+                uses[index].add(instruction.initial.slot)
+            elif type(instruction) is IRArrayLoadI32:
+                non_param_seen = True
+                if type(instruction.dest) is not int or instruction.dest != next_slot:
+                    raise ValueError("native array-load result slot must be defined in sequence")
+                if (type(instruction.array_id) is not int or instruction.array_id not in arrays
+                        or type(instruction.index) is not IRValue
+                        or type(instruction.index.slot) is not int):
+                    raise ValueError("native array load references an invalid array or index")
+                array_uses[index].add(instruction.array_id)
+                uses[index].add(instruction.index.slot)
+                definitions[index].add(instruction.dest)
+                next_slot += 1
+            elif type(instruction) is IRArrayStoreI32:
+                non_param_seen = True
+                if type(instruction.array_id) is not int or instruction.array_id not in arrays:
+                    raise ValueError("native array store references an unknown array")
+                if not arrays[instruction.array_id][2]:
+                    raise ValueError("native IR may only store to a mutable fixed array")
+                if (type(instruction.index) is not IRValue or type(instruction.index.slot) is not int
+                        or type(instruction.value) is not IRValue or type(instruction.value.slot) is not int):
+                    raise ValueError("native array store requires valid index and value slots")
+                array_uses[index].add(instruction.array_id)
+                uses[index].update((instruction.index.slot, instruction.value.slot))
             elif type(instruction) is IRUnaryI32:
                 non_param_seen = True
                 if type(instruction.dest) is not int or instruction.dest != next_slot:
@@ -339,10 +409,15 @@ def verify_ir(ir):
         # the empty entry state then monotonically removes slots not defined on
         # every path. Only successors of changed nodes need to be revisited.
         all_slots = set(range(next_slot))
+        all_arrays = set(arrays)
         in_sets = [set(all_slots) for _ in instructions]
         out_sets = [set(all_slots) for _ in instructions]
+        in_arrays = [set(all_arrays) for _ in instructions]
+        out_arrays = [set(all_arrays) for _ in instructions]
         in_sets[0] = set()
         out_sets[0] = set(definitions[0])
+        in_arrays[0] = set()
+        out_arrays[0] = set(array_definitions[0])
         worklist = deque(successors[0])
         queued = set(worklist)
         while worklist:
@@ -353,13 +428,22 @@ def verify_ir(ir):
             # initial-path fact.
             if index == 0:
                 incoming = set()
+                incoming_arrays = set()
             else:
                 pred_states = [out_sets[pred] for pred in predecessors[index]]
+                pred_array_states = [out_arrays[pred] for pred in predecessors[index]]
                 incoming = (set.intersection(*pred_states) if pred_states else set())
+                incoming_arrays = (
+                    set.intersection(*pred_array_states) if pred_array_states else set()
+                )
             outgoing = incoming | definitions[index]
-            if incoming != in_sets[index] or outgoing != out_sets[index]:
+            outgoing_arrays = incoming_arrays | array_definitions[index]
+            if (incoming != in_sets[index] or outgoing != out_sets[index]
+                    or incoming_arrays != in_arrays[index] or outgoing_arrays != out_arrays[index]):
                 in_sets[index] = incoming
                 out_sets[index] = outgoing
+                in_arrays[index] = incoming_arrays
+                out_arrays[index] = outgoing_arrays
                 for successor in successors[index]:
                     if successor not in queued:
                         queued.add(successor)
@@ -368,6 +452,8 @@ def verify_ir(ir):
         for index in sorted(reachable):
             if not uses[index].issubset(in_sets[index]):
                 raise ValueError("native IR uses an undefined i32 value on at least one control-flow path")
+            if not array_uses[index].issubset(in_arrays[index]):
+                raise ValueError("native IR uses a fixed array before it is initialized on every control-flow path")
 
     verify_stream(ir.instructions, True, 0)
     for function in ir.functions:
