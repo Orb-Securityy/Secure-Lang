@@ -5,9 +5,11 @@ assembler, linker, or C runtime. It consumes only the shared immutable IR contra
 """
 import struct
 
-from .ir import (IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit, IRFunction, IRJump, IRLabel,
-                 IRLocalI32, IRParamI32, IRPrintI32, IRReturnI32, IRStoreI32, IRUnaryI32,
-                 IRValue, IRWrite, MAX_OUTPUT, MAX_NATIVE_ARGS, verify_ir)
+from .ir import (IRArrayCreate, IRArrayLoadI32, IRArrayStoreI32, IRBinaryI32, IRCallI32,
+                 IRCompareBranch, IRConstI32, IRExit, IRFunction, IRJump, IRLabel,
+                 IRLocalI32, IRParamI32, IRPrintI32, IRReturnI32, IRStoreI32,
+                 IRUnaryI32, IRValue, IRWrite, MAX_OUTPUT, MAX_NATIVE_ARGS,
+                 MAX_NATIVE_ARRAY_BYTES, verify_ir)
 
 
 ELF_BASE = 0  # position-independent image; Linux chooses the load base
@@ -71,6 +73,38 @@ def _emit_load_ecx(code, slot):
 def _emit_store_eax(code, slot):
     code.extend(bytes.fromhex("898424"))
     code.extend(struct.pack("<I", _slot_disp(slot)))
+
+
+def _emit_array_bounds_check(code, index_slot, length, trap_fixups):
+    _emit_load_ecx(code, index_slot)
+    code.extend(bytes.fromhex("81f9"))
+    code.extend(struct.pack("<I", length))
+    _emit_jcc32(code, 0x83, trap_fixups)  # jae: reject negative and index >= length
+
+
+def _emit_array_address(code, base_disp, element_size):
+    if type(base_disp) is not int or not 32 <= base_disp <= MAX_STACK_FRAME - 1:
+        raise ValueError("native fixed-array frame offset is invalid")
+    if element_size == 1:
+        code.extend(bytes.fromhex("0fb6840c"))  # movzx eax, byte [rsp + rcx + disp32]
+    elif element_size == 4:
+        code.extend(bytes.fromhex("8b848c"))    # mov eax, dword [rsp + rcx*4 + disp32]
+    else:
+        raise ValueError("unsupported native fixed-array element size")
+    code.extend(struct.pack("<I", base_disp))
+
+
+def _emit_array_store(code, base_disp, element_size, trap_fixups):
+    if element_size == 1:
+        code.append(0xA9)                       # test eax, 0xffffff00
+        code.extend(struct.pack("<I", 0xFFFFFF00))
+        _emit_jcc32(code, 0x85, trap_fixups)    # jnz: u8 value must fit
+        code.extend(bytes.fromhex("88840c"))    # mov byte [rsp + rcx + disp32], al
+    elif element_size == 4:
+        code.extend(bytes.fromhex("89848c"))    # mov dword [rsp + rcx*4 + disp32], eax
+    else:
+        raise ValueError("unsupported native fixed-array element size")
+    code.extend(struct.pack("<I", base_disp))
 
 
 def _emit_i32_formatter(code, value, newline, call_fixups):
@@ -224,11 +258,25 @@ def _emit_program_code(ir):
 
     def emit_stream(instructions, scope, is_entry, param_count):
         nonlocal needs_write_helper
-        slot_types = (IRConstI32, IRParamI32, IRLocalI32, IRUnaryI32, IRBinaryI32, IRCallI32)
+        slot_types = (
+            IRConstI32, IRParamI32, IRLocalI32, IRUnaryI32,
+            IRBinaryI32, IRCallI32, IRArrayLoadI32,
+        )
         slot_count = sum(type(ins) in slot_types for ins in instructions)
-        # The first 32 bytes are reserved for the integer formatter; slots
-        # begin at [rsp + 32] in both entry and ordinary function frames.
+        # The first 32 bytes are reserved for the integer formatter; scalar
+        # slots follow, then fixed arrays with their required element alignment.
         local_bytes = 32 + slot_count * 4
+        array_layout = {}
+        for candidate in instructions:
+            if type(candidate) is IRArrayCreate:
+                alignment = candidate.element_size
+                local_bytes = (local_bytes + alignment - 1) & ~(alignment - 1)
+                array_layout[candidate.array_id] = (
+                    local_bytes, candidate.length, candidate.element_size, candidate.mutable
+                )
+                local_bytes += candidate.length * candidate.element_size
+        if local_bytes - (32 + slot_count * 4) > MAX_NATIVE_ARRAY_BYTES:
+            raise ValueError("native fixed arrays exceed their stack-byte budget")
         if is_entry:
             frame_size = ((local_bytes + 15) // 16) * 16
         else:
@@ -253,6 +301,39 @@ def _emit_program_code(ir):
             elif type(instruction) is IRLocalI32:
                 _emit_load_eax(code, instruction.initial.slot)
                 _emit_store_eax(code, instruction.dest)
+            elif type(instruction) is IRArrayCreate:
+                layout = array_layout.get(instruction.array_id)
+                if layout is None:
+                    raise ValueError("native fixed-array layout is missing")
+                base_disp, length, element_size, _mutable = layout
+                _emit_load_eax(code, instruction.initial.slot)
+                if element_size == 1:
+                    code.append(0xA9)                   # test eax, 0xffffff00
+                    code.extend(struct.pack("<I", 0xFFFFFF00))
+                    _emit_jcc32(code, 0x85, trap_fixups)
+                code.extend(bytes.fromhex("488dbc24"))  # lea rdi, [rsp + array base]
+                code.extend(struct.pack("<I", base_disp))
+                code.append(0xB9)                       # mov ecx, array length
+                code.extend(struct.pack("<I", length))
+                code.extend(bytes.fromhex("f3aa" if element_size == 1 else "f3ab"))
+            elif type(instruction) is IRArrayLoadI32:
+                layout = array_layout.get(instruction.array_id)
+                if layout is None:
+                    raise ValueError("native array load has no stack layout")
+                base_disp, length, element_size, _mutable = layout
+                _emit_array_bounds_check(code, instruction.index.slot, length, trap_fixups)
+                _emit_array_address(code, base_disp, element_size)
+                _emit_store_eax(code, instruction.dest)
+            elif type(instruction) is IRArrayStoreI32:
+                layout = array_layout.get(instruction.array_id)
+                if layout is None:
+                    raise ValueError("native array store has no stack layout")
+                base_disp, length, element_size, mutable = layout
+                if not mutable:
+                    raise ValueError("native array store targets an immutable array")
+                _emit_array_bounds_check(code, instruction.index.slot, length, trap_fixups)
+                _emit_load_eax(code, instruction.value.slot)
+                _emit_array_store(code, base_disp, element_size, trap_fixups)
             elif type(instruction) is IRStoreI32:
                 _emit_load_eax(code, instruction.value.slot)
                 _emit_store_eax(code, instruction.dest)
