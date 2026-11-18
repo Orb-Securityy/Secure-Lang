@@ -422,6 +422,7 @@ class NativeX8664Tests(unittest.TestCase):
             'fn main() { for i in "a"..2 { println(i); } }',
             'fn main() { for i in 0..2 { i += 1; } }',
             'fn main() { let mut i: i32 = 0; for i in 0..2 { println(i); } }',
+            'fn step(value: i32) -> i32 { return value; } fn main() { for step in 0..2 { println(step); } }',
         ]
         for source in unsupported:
             with self.subTest(source=source):
