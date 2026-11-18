@@ -1,6 +1,6 @@
 # Independent toolchain architecture
 
-Status: **target architecture, not yet implemented**. This document defines the acceptance criteria for making Secure an independently buildable language toolchain. It is stricter than adding a second code-generation option.
+Status: **target architecture; only a tiny native bootstrap slice exists** (see §8). This document defines the acceptance criteria for an independently buildable Secure toolchain. It is stricter than adding a second code-generation option.
 
 ## 1. Definition of independence
 
@@ -103,6 +103,6 @@ The current repository does **not** satisfy the independence definition:
 These are architectural dependencies, not packaging issues. Each must be removed from the release path while preserving a temporary, auditable bootstrap boundary until self-hosting is established.
 ## 8. Prototype status
 
-The `independence/self-hosted-native-toolchain` branch contains an initial direct-ELF vertical slice exposed as `securec native-build`. It parses Secure source and accepts only a safe `fn main()` body made of `println` calls with one string literal each. It writes a static x86-64 Linux `ET_EXEC` image directly, using Linux `write` and `exit` syscalls. Its load segment is read/execute only and its GNU stack declaration is non-executable. The path has no C emission, GCC, assembler, linker, libc, or other language runtime in that execution chain.
+The `independence/self-hosted-native-toolchain` branch contains an initial direct-ELF vertical slice exposed as `securec native-build`. It parses Secure source and accepts only a safe `fn main()` body made of `println` calls with one string literal each. It writes a static x86-64 Linux `ET_EXEC` image directly, using Linux `write` and `exit` syscalls. Its code segment is read/execute, string data is read-only, and its GNU stack declaration is non-executable. The path has no C emission, GCC, assembler, linker, libc, or other language runtime in that execution chain.
 
 This is **not** completion of Phase B or overall independence: the host compiler and parser still run on Python, only this tiny syntax subset is supported, the ordinary `build`/`run` path remains Python-to-C-to-GCC, and the existing C runtime remains in place. The prototype is a testable first slice, not a production backend. It must pass its execution/ELF tests and receive broader code-generation, syscall-error, and adversarial validation before expansion.
