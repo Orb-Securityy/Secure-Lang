@@ -1,0 +1,6 @@
+// EXPECT-ERR: cannot assign through an immutable binding
+struct Label { text: str }
+fn main() {
+    let mut label = Label { text: "immutable" };
+    label.text[0] = 0u8;
+}

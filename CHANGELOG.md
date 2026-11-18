@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — immutable str mutation regression coverage
+
+- Add compile-fail cases for indexed writes through mutable `str` bindings, mutable struct fields, and mutable borrows of `str` fields.
+
 ## Unreleased — references cannot hide behind raw pointers
 
 - Reject raw pointer types whose pointee recursively contains a second-class reference, keeping reference values confined to direct call arguments.
