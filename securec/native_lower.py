@@ -278,7 +278,7 @@ def lower_to_ir(items):
             _error("native blocks only support `if` and `while` as tail expressions", block)
         bindings = dict(outer_bindings)
         terminated = False
-        for stmt in block.stmts:
+        for stmt_index, stmt in enumerate(block.stmts):
             if stmt.k == "Let":
                 if stmt.name in bindings or stmt.name in constants or stmt.name in ("print", "println"):
                     _error(f"duplicate, reserved, or shadowed native binding `{stmt.name}`", stmt)
@@ -327,7 +327,11 @@ def lower_to_ir(items):
                     source = IRValue(dest)
                 instructions.append(IRStoreI32(destination.slot, source))
             elif stmt.k == "ExprStmt" and stmt.e.k == "If":
-                lower_if(stmt.e, bindings)
+                terminated = lower_if(stmt.e, bindings)
+                if terminated:
+                    if stmt_index != len(block.stmts) - 1 or block.tail is not None:
+                        _error("unreachable statement after a terminating `if`", stmt)
+                    break
             elif stmt.k == "ExprStmt" and stmt.e.k == "While":
                 lower_while(stmt.e, bindings)
             elif stmt.k == "ExprStmt" and stmt.e.k in ("Break", "Continue"):
@@ -336,6 +340,8 @@ def lower_to_ir(items):
                 cond_label, end_label = loop_stack[-1]
                 instructions.append(IRJump(end_label if stmt.e.k == "Break" else cond_label))
                 terminated = True
+                if stmt_index != len(block.stmts) - 1 or block.tail is not None:
+                    _error("unreachable statement after `break`/`continue`", stmt)
                 break
             else:
                 _error("native subset supports bindings, assignments, print calls, if/while, break, and continue", stmt)
