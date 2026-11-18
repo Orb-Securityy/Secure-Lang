@@ -1,0 +1,6 @@
+// EXPECT-ERR: unused `Result` binding `value`
+fn make() -> Result<i32, i32> { Err(7) }
+fn main() {
+    let value = make();
+    println(value.is_err());
+}
