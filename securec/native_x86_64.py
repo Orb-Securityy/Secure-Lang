@@ -5,7 +5,7 @@ assembler, linker, or C runtime. It consumes only the shared immutable IR contra
 """
 import struct
 
-from .ir import (IRBinaryI32, IRBranchI32, IRConstI32, IRExit, IRJump, IRLabel, IRPrintI32, IRUnaryI32,
+from .ir import (IRBinaryI32, IRCompareBranch, IRConstI32, IRExit, IRJump, IRLabel, IRPrintI32, IRUnaryI32,
                  IRValue, IRWrite, MAX_OUTPUT, verify_ir)
 
 
@@ -210,7 +210,7 @@ def _emit_program_code(ir):
         elif type(instruction) is IRPrintI32:
             _emit_i32_formatter(code, instruction.value, instruction.newline, call_fixups)
             needs_write_helper = True
-        elif type(instruction) is IRBranchI32:
+        elif type(instruction) is IRCompareBranch:
             _emit_load_eax(code, instruction.left.slot)
             _emit_load_ecx(code, instruction.right.slot)
             code.extend(bytes.fromhex("39c8"))  # cmp eax, ecx
@@ -218,10 +218,10 @@ def _emit_program_code(ir):
                                "<=": 0x8E, ">": 0x8F, ">=": 0x8D}
             branch_fixups = []
             _emit_jcc32(code, condition_codes[instruction.op], branch_fixups)
-            control_fixups.append((branch_fixups[0], instruction.if_true))
+            control_fixups.append((branch_fixups[0], instruction.true_target))
             jump_fixups = []
             _emit_jmp32(code, jump_fixups)
-            control_fixups.append((jump_fixups[0], instruction.if_false))
+            control_fixups.append((jump_fixups[0], instruction.false_target))
         elif type(instruction) is IRJump:
             jump_fixups = []
             _emit_jmp32(code, jump_fixups)
