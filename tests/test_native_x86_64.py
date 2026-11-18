@@ -136,7 +136,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'Answer: 42\n')
+        self.assertEqual(result.stdout, b'Answer: 42; 84-2\n-3:-1\n-2147483648\n')
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
@@ -148,7 +148,7 @@ class NativeX8664Tests(unittest.TestCase):
             self.assertEqual(main(['native-build', source, '-o', output]), 0)
             result = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'Answer: 42\\n')
+        self.assertEqual(result.stdout, b'Answer: 42\n')
     def test_native_i32_rejects_overflow_division_errors_and_wrong_types(self):
         unsupported = [
             'fn main() { println(2147483648); }',
