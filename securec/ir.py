@@ -345,3 +345,4 @@ def verify_ir(ir):
     verify_stream(ir.instructions, True, 0)
     for function in ir.functions:
         verify_stream(function.instructions, False, function.param_count)
+    return output_size[0]
