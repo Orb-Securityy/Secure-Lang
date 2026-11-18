@@ -1377,7 +1377,9 @@ class Compiler:
         if t.k == "int" and to.k == "int":
             slo, shi = int_range(t.name)
             tlo, thi = int_range(to.name)
-            if n.wrapping or (tlo <= slo and shi <= thi):
+            if n.wrapping:
+                return self.tmp(to.name, f"sec_wrap_{to.name}((__uint128_t){c})"), to
+            if tlo <= slo and shi <= thi:
                 return self.tmp(to.name, f"({to.name}){c}"), to
             cv = self.cval(n.e, t.name)
             if cv is not None and not tlo <= cv <= thi:
@@ -1390,7 +1392,10 @@ class Compiler:
         if t.k == "float" and to.k == "int":
             return self.tmp(to.name, f"SEC_CAST({to.name}, SEC_MIN_{to.name}, SEC_MAX_{to.name}, sec_f2i({c}, {L}), {L})"), to
         if t.k in ("bool", "enum") and to.k == "int":
-            return self.tmp(to.name, f"({to.name}){c}"), to
+            return self.tmp(
+                to.name,
+                f"SEC_CAST({to.name}, SEC_MIN_{to.name}, SEC_MAX_{to.name}, {c}, {L})",
+            ), to
         self.err(f"cannot cast `{tstr(t)}` to `{tstr(to)}`", n)
 
     # ---- control flow
