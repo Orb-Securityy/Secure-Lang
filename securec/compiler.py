@@ -1394,7 +1394,10 @@ class Compiler:
         if t.k == "float" and to.k == "int":
             return self.tmp(to.name, f"SEC_CAST({to.name}, SEC_MIN_{to.name}, SEC_MAX_{to.name}, sec_f2i({c}, {L}), {L})"), to
         if t.k in ("bool", "enum") and to.k == "int":
-            return self.tmp(to.name, f"({to.name}){c}"), to
+            return self.tmp(
+                to.name,
+                f"SEC_CAST({to.name}, SEC_MIN_{to.name}, SEC_MAX_{to.name}, {c}, {L})",
+            ), to
         self.err(f"cannot cast `{tstr(t)}` to `{tstr(to)}`", n)
 
     # ---- control flow
