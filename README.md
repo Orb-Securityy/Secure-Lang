@@ -1,6 +1,6 @@
 # Secure — a security-first systems language (v0.1.22, bootstrap)
 
-**Orb Security · Orb Corporation · Proprietary & confidential**
+**Orb Security · Orb Corporation · Proprietary project · public source repository**
 
 Secure is a general-purpose, natively compiled language whose design goal is that *whole classes of
 vulnerabilities cannot be expressed in safe code*: memory corruption, data races, integer wrap-around,
@@ -8,7 +8,7 @@ null dereference, uninitialized reads, silent numeric conversion, ignored errors
 
 This repository is the **bootstrap toolchain**: `securec`, a compiler written in Python (a memory-safe host)
 that type-checks, ownership-checks and lowers Secure to hardened GNU C11, then to a native PIE binary via `gcc`.
-The current backend requires 8-bit bytes, fixed integer/bool/f64 sizes, a 64-bit `size_t`/pointer ABI, and bounded scalar/thread alignments; unsupported targets are rejected at compile time.
+The current backend requires 8-bit bytes, fixed integer/bool/f64 sizes, a full-range 64-bit `size_t`/pointer ABI, and bounded scalar/thread alignments; unsupported targets are rejected at compile time.
 It is a working, tested v0.1.22 safety-hardening update — not a finished production system. Read `docs/SECURITY.md` for exactly what is
 and is not guaranteed.
 
