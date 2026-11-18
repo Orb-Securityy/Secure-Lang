@@ -1,0 +1,6 @@
+// Native subset: static strings, immutable i32 values, and checked constant arithmetic.
+const BASE: i32 = 40;
+fn main() {
+    let offset: i32 = 2;
+    println("Answer: ", BASE + offset);
+}
