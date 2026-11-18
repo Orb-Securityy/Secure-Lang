@@ -1,0 +1,5 @@
+// EXPECT-ERR: Result values cannot be stored in Option<T>
+fn main() -> i32 {
+    let wrapped: Option<Result<i32, i32>> = Some(Err(7));
+    return 0;
+}
