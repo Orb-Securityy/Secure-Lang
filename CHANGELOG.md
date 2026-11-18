@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — exhaustive wrapping property tests
+
+- Exhaust all signed and unsigned 8-bit operand pairs for wrapping addition, subtraction, and multiplication against independent modular reference models.
+- Exercise signed and unsigned 8-bit wrapping conversions across every 16-bit source pattern, with UBSan enabled.
+
 ## Unreleased — checked enum-to-integer casts
 
 - Route enum-to-integer casts through the runtime range check instead of a direct C cast, preventing silent narrowing and implementation-defined signed results.
