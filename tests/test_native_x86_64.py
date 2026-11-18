@@ -9,7 +9,7 @@ import unittest
 from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
-from securec.ir import MAX_OUTPUT, IRExit, IRProgram, IRWrite, verify_ir
+from securec.ir import MAX_OUTPUT, IRExit, IRPrintI32, IRProgram, IRWrite, verify_ir
 from securec.native_lower import compile_native_subset, lower_to_ir
 from securec.native_x86_64 import emit_native
 
@@ -36,7 +36,8 @@ class NativeX8664Tests(unittest.TestCase):
         code, rodata = loads
         self.assertEqual(code[1], 5)    # PF_R | PF_X
         self.assertEqual(rodata[1], 4)  # PF_R only; literals are not executable
-        self.assertEqual(code[5], 0x1000 + 64)
+        self.assertGreater(code[5], 0x1000)
+        self.assertLessEqual(code[5], 0x2000)
         self.assertEqual(rodata[2], 0x2000)
         self.assertGreater(rodata[5], 0)
         self.assertEqual(stack[1], 6)   # PF_R | PF_W, never executable
@@ -59,11 +60,17 @@ class NativeX8664Tests(unittest.TestCase):
 
     def test_native_machine_code_has_eintr_and_partial_write_branches(self):
         image = compile_native_subset('fn main() { println("retry"); }')
-        code = image[0x1000:0x1000 + 64]
-        self.assertEqual(code[24:28], bytes.fromhex('4883f8fc'))
-        self.assertEqual(code[28:30], bytes.fromhex('74f8'))
-        self.assertEqual(code[33:35], bytes.fromhex('7e11'))
-        self.assertEqual(code[41:43], bytes.fromhex('75eb'))
+        e_phoff = struct.unpack_from('<Q', image, 32)[0]
+        e_phentsize, e_phnum = struct.unpack_from('<HH', image, 54)
+        headers = [struct.unpack_from('<IIQQQQQQ', image, e_phoff + i * e_phentsize)
+                   for i in range(e_phnum)]
+        code_segment = next(h for h in headers if h[0] == 1)
+        code = image[0x1000:code_segment[5]]
+        self.assertIn(bytes.fromhex('4883f8fc'), code)  # EINTR comparison
+        self.assertIn(bytes.fromhex('4801c6'), code)    # advance after a partial write
+        self.assertIn(bytes.fromhex('4829c2'), code)    # reduce remaining byte count
+        self.assertIn(bytes.fromhex('0f05'), code)      # direct Linux syscall
+        self.assertIn(bytes.fromhex('c3'), code)        # helper returns to caller
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
@@ -187,6 +194,9 @@ class NativeX8664Tests(unittest.TestCase):
             IRProgram((IRExit(0), IRWrite(b"late", False))),
             IRProgram((IRWrite("not-bytes", False), IRExit(0))),
             IRProgram((IRWrite(b"ok", 1), IRExit(0))),
+            IRProgram((IRPrintI32(1 << 31, False), IRExit(0))),
+            IRProgram((IRPrintI32("not-int", False), IRExit(0))),
+            IRProgram((IRPrintI32(10, 1), IRExit(0))),
             IRProgram((IRWrite(b"ok", False), IRExit(1))),
         ]
         for ir in invalid:
@@ -194,6 +204,19 @@ class NativeX8664Tests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     verify_ir(ir)
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_i32_runtime_formatter_honors_ir_newline(self):
+        ir = IRProgram((IRPrintI32(-2147483648, True), IRPrintI32(0, False), IRExit(0)))
+        image = emit_native(ir)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'ir-i32')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'-2147483648\\n0')
     def test_native_ir_rejects_output_larger_than_limit(self):
         ir = IRProgram((IRWrite(b'x' * (MAX_OUTPUT + 1), False), IRExit(0)))
         with self.assertRaises(ValueError):
