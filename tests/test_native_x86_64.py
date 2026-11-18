@@ -428,6 +428,106 @@ class NativeX8664Tests(unittest.TestCase):
             trapped = subprocess.run([path2], capture_output=True, check=False)
         self.assertEqual(trapped.returncode, 101, trapped.stderr)
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_break_and_continue_control_current_loop(self):
+        source = (
+            'fn main() {\n'
+            '    let mut i: i32 = 0;\n'
+            '    let mut total: i32 = 0;\n'
+            '    while i < 10 {\n'
+            '        i += 1;\n'
+            '        if i == 3 { continue; }\n'
+            '        if i == 7 { break; }\n'
+            '        total += i;\n'
+            '    }\n'
+            '    println(total);\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'break-continue')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'18\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_nested_loop_break_and_continue_target_innermost_loop(self):
+        source = (
+            'fn main() {\n'
+            '    let mut outer: i32 = 0;\n'
+            '    let mut total: i32 = 0;\n'
+            '    while outer < 3 {\n'
+            '        outer += 1;\n'
+            '        let mut inner: i32 = 0;\n'
+            '        while inner < 5 {\n'
+            '            inner += 1;\n'
+            '            if inner == 2 { continue; }\n'
+            '            if inner == 4 { break; }\n'
+            '            total += outer * 10 + inner;\n'
+            '        }\n'
+            '    }\n'
+            '    println(total);\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'nested-break-continue')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'132\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_if_both_branches_break_or_continue_terminates_block(self):
+        source = (
+            'fn main() {\n'
+            '    let mut i: i32 = 0;\n'
+            '    while i < 2 {\n'
+            '        i += 1;\n'
+            '        if i == 1 { continue; } else { break; }\n'
+            '    }\n'
+            '    println("done");\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'branch-loop-termination')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'done\n')
+
+    def test_native_break_and_continue_are_rejected_outside_loops(self):
+        unsupported = [
+            'fn main() { break; }',
+            'fn main() { continue; }',
+            'fn main() { if true { break; } }',
+            'fn main() { while 1 < 2 { break; } continue; }',
+        ]
+        for source in unsupported:
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
+
+    def test_native_break_and_continue_reject_following_unreachable_statements(self):
+        unsupported = [
+            'fn main() { while 1 < 2 { break; println("bad"); } }',
+            'fn main() { while 1 < 2 { continue; println("bad"); } }',
+        ]
+        for source in unsupported:
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
     def test_native_while_rejects_invalid_loop_conditions_and_immutable_stores(self):
         unsupported = [
             'fn main() { while true { println("bad"); } }',
