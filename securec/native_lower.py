@@ -1,7 +1,8 @@
 """Python bootstrap frontend/lowering for the restricted native Secure subset."""
 from .ir import (IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit, IRFunction, IRJump,
                  IRLabel, IRLocalI32, IRParamI32, IRPrintI32, IRProgram, IRReturnI32,
-                 IRStoreI32, IRUnaryI32, IRValue, IRWrite, MAX_NATIVE_ARGS)
+                 IRStoreI32, IRUnaryI32, IRValue, IRWrite, MAX_NATIVE_ARGS,
+                 MAX_NATIVE_FUNCTIONS)
 from .lexer import SecError
 from .native_x86_64 import emit_native
 from .parser import parse
@@ -9,6 +10,7 @@ from .parser import parse
 
 I32_MIN = -(1 << 31)
 I32_MAX = (1 << 31) - 1
+MAX_NATIVE_SOURCE = 1 << 20
 ARITHMETIC = ("+", "-", "*", "/", "%")
 COMPARISONS = ("==", "!=", "<", "<=", ">", ">=")
 
@@ -201,6 +203,8 @@ def lower_to_ir(items):
             if item.name in raw_functions or item.name in ("print", "println"):
                 _error(f"duplicate or reserved native function `{item.name}`", item)
             raw_functions[item.name] = item
+            if len(raw_functions) > MAX_NATIVE_FUNCTIONS:
+                _error(f"native subset supports at most {MAX_NATIVE_FUNCTIONS} functions", item)
         elif item.k != "Const":
             _error("native subset accepts only constants and function declarations", item)
 
@@ -516,6 +520,16 @@ def lower_to_ir(items):
 
 def compile_native_subset(source):
     """Parse, lower, verify, and emit native ELF with the Python bootstrap frontend."""
+    if type(source) is not str:
+        raise SecError("native source must be UTF-8 text", 1, 1)
+    if len(source) > MAX_NATIVE_SOURCE:
+        raise SecError(f"native source exceeds the {MAX_NATIVE_SOURCE}-byte limit", 1, 1)
+    try:
+        source_size = len(source.encode("utf-8"))
+    except UnicodeEncodeError as exc:
+        raise SecError("native source contains invalid Unicode text", 1, 1) from exc
+    if source_size > MAX_NATIVE_SOURCE:
+        raise SecError(f"native source exceeds the {MAX_NATIVE_SOURCE}-byte limit", 1, 1)
     try:
         items = parse(source)
         ir = lower_to_ir(items)
