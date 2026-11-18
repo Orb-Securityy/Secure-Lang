@@ -796,12 +796,12 @@ class NativeX8664Tests(unittest.TestCase):
     def test_native_lowering_enforces_instruction_budget_across_functions(self):
         functions = []
         for index in range(50):
-            body = '    println("x");\\n' * 20
+            body = '    println("x");\n' * 20
             functions.append(
-                f"fn helper{index}() -> i32 {{\\n"
+                f"fn helper{index}() -> i32 {{\n"
                 + body
-                + "    return 0;\\n"
-                + "}\\n"
+                + "    return 0;\n"
+                + "}\n"
             )
         source = "".join(functions) + "fn main() {}"
         with self.assertRaises(SecError):
