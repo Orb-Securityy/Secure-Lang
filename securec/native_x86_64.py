@@ -5,12 +5,14 @@ assembler, linker, or C runtime. It consumes only the shared immutable IR contra
 """
 import struct
 
-from .ir import IRExit, IRPrintI32, IRProgram, IRWrite, MAX_OUTPUT, verify_ir
+from .ir import (IRBinaryI32, IRConstI32, IRExit, IRPrintI32, IRUnaryI32,
+                 IRValue, IRWrite, MAX_OUTPUT, verify_ir)
 
 
 ELF_BASE = 0x400000
 CODE_OFFSET = 0x1000
 DATA_OFFSET = 0x2000
+MAX_STACK_FRAME = 1 << 20
 
 
 def _patch_rel8(code, branch, target):
@@ -20,22 +22,70 @@ def _patch_rel8(code, branch, target):
     code[branch + 1] = displacement & 0xFF
 
 
+def _patch_rel32(code, position, target):
+    displacement = target - (position + 4)
+    if not -(1 << 31) <= displacement < (1 << 31):
+        raise ValueError("native relative branch is out of range")
+    code[position:position + 4] = struct.pack("<i", displacement)
+
+
+def _emit_jcc32(code, opcode, fixups):
+    code.extend((0x0F, opcode))
+    fixups.append(len(code))
+    code.extend(bytes(4))
+
+
+def _emit_jmp32(code, fixups):
+    code.append(0xE9)
+    fixups.append(len(code))
+    code.extend(bytes(4))
+
+
 def _emit_call(code, fixups):
     code.append(0xE8)
     fixups.append(len(code))
     code.extend(bytes(4))
 
 
+def _slot_disp(slot):
+    if type(slot) is not int or slot < 0:
+        raise ValueError("invalid native i32 slot")
+    offset = 32 + slot * 4
+    if offset > MAX_STACK_FRAME - 4:
+        raise ValueError("native stack frame exceeds its limit")
+    return offset
+
+
+def _emit_load_eax(code, slot):
+    code.extend(bytes.fromhex("8b8424"))
+    code.extend(struct.pack("<I", _slot_disp(slot)))
+
+
+def _emit_load_ecx(code, slot):
+    code.extend(bytes.fromhex("8b8c24"))
+    code.extend(struct.pack("<I", _slot_disp(slot)))
+
+
+def _emit_store_eax(code, slot):
+    code.extend(bytes.fromhex("898424"))
+    code.extend(struct.pack("<I", _slot_disp(slot)))
+
+
 def _emit_i32_formatter(code, value, newline, call_fixups):
-    """Emit runtime signed-i32-to-decimal conversion using a 32-byte stack buffer."""
-    code.append(0xB8)                         # mov eax, imm32
-    code.extend(struct.pack("<i", value))
+    """Emit signed-i32 decimal conversion using a 32-byte stack buffer."""
+    if type(value) is IRValue:
+        _emit_load_eax(code, value.slot)
+    elif type(value) is int:
+        code.append(0xB8)
+        code.extend(struct.pack("<i", value))
+    else:
+        raise ValueError("invalid native i32 print operand")
     code.extend(bytes.fromhex("41b8"))
-    code.extend(bytes(4))                     # xor-like initialization: mov r8d, 0
+    code.extend(bytes(4))                     # mov r8d, 0 (negative flag)
     code.extend(bytes.fromhex("85c0"))       # test eax, eax
     sign_branch = len(code)
     code.extend((0x79, 0))                    # jns positive
-    code.extend(bytes.fromhex("f7d8"))       # neg eax; 0x80000000 remains unsigned magnitude
+    code.extend(bytes.fromhex("f7d8"))       # neg eax (0x80000000 remains unsigned magnitude)
     code.extend(bytes.fromhex("41b8"))
     code.extend(struct.pack("<I", 1))        # mov r8d, 1 (negative)
     positive = len(code)
@@ -45,9 +95,9 @@ def _emit_i32_formatter(code, value, newline, call_fixups):
     code.extend(bytes.fromhex("41b9"))
     code.extend(bytes(4))                     # mov r9d, 0 (output length)
     if newline:
-        code.extend(bytes.fromhex("c6060a"))     # mov byte [rsi], newline
-        code.extend(bytes.fromhex("48ffce"))     # dec rsi
-        code.extend(bytes.fromhex("41ffc1"))     # inc r9d
+        code.extend(bytes.fromhex("c6060a")) # mov byte [rsi], newline
+        code.extend(bytes.fromhex("48ffce")) # dec rsi
+        code.extend(bytes.fromhex("41ffc1")) # inc r9d
     loop_label = len(code)
     code.extend(bytes.fromhex("31d2"))       # xor edx, edx
     code.append(0xB9)
@@ -75,18 +125,74 @@ def _emit_i32_formatter(code, value, newline, call_fixups):
     _emit_call(code, call_fixups)
 
 
+def _emit_checked_arithmetic(code, instruction, trap_fixups):
+    if type(instruction) is IRUnaryI32:
+        _emit_load_eax(code, instruction.operand.slot)
+        code.extend(bytes.fromhex("3d00000080"))  # cmp eax, INT32_MIN
+        _emit_jcc32(code, 0x84, trap_fixups)       # je panic
+        code.extend(bytes.fromhex("f7d8"))        # neg eax
+        _emit_store_eax(code, instruction.dest)
+        return
+
+    if type(instruction) is not IRBinaryI32:
+        raise ValueError("unknown native arithmetic IR instruction")
+    _emit_load_eax(code, instruction.left.slot)
+    _emit_load_ecx(code, instruction.right.slot)
+    if instruction.op == "+":
+        code.extend(bytes.fromhex("01c8"))        # add eax, ecx
+        _emit_jcc32(code, 0x80, trap_fixups)       # jo panic
+    elif instruction.op == "-":
+        code.extend(bytes.fromhex("29c8"))        # sub eax, ecx
+        _emit_jcc32(code, 0x80, trap_fixups)       # jo panic
+    elif instruction.op == "*":
+        code.extend(bytes.fromhex("0fafc1"))      # imul eax, ecx
+        _emit_jcc32(code, 0x80, trap_fixups)       # jo panic
+    elif instruction.op in ("/", "%"):
+        code.extend(bytes.fromhex("85c9"))        # test ecx, ecx
+        _emit_jcc32(code, 0x84, trap_fixups)       # jz panic
+        code.extend(bytes.fromhex("3d00000080"))  # cmp eax, INT32_MIN
+        skip_min_check = []
+        _emit_jcc32(code, 0x85, skip_min_check)    # jne safe
+        code.extend(bytes.fromhex("83f9ff"))      # cmp ecx, -1
+        _emit_jcc32(code, 0x85, skip_min_check)    # jne safe
+        _emit_jmp32(code, trap_fixups)             # INT32_MIN / -1 panics
+        safe = len(code)
+        for position in skip_min_check:
+            _patch_rel32(code, position, safe)
+        code.extend(bytes.fromhex("99"))          # cdq
+        code.extend(bytes.fromhex("f7f9"))        # idiv ecx
+        if instruction.op == "%":
+            code.extend(bytes.fromhex("89d0"))    # mov eax, edx (remainder)
+    else:
+        raise ValueError("unsupported native i32 arithmetic operator")
+    _emit_store_eax(code, instruction.dest)
+
+
 def _emit_program_code(ir):
     code = bytearray()
     rodata = bytearray()
     call_fixups = []
     lea_fixups = []
+    trap_fixups = []
     needs_write_helper = False
+    slot_count = sum(type(ins) in (IRConstI32, IRUnaryI32, IRBinaryI32) for ins in ir.instructions)
     needs_stack_buffer = any(type(ins) is IRPrintI32 for ins in ir.instructions)
-    if needs_stack_buffer:
-        code.extend(bytes.fromhex("4883ec20"))  # sub rsp, 32
+    frame_size = 0
+    if slot_count or needs_stack_buffer:
+        frame_size = ((32 + slot_count * 4 + 15) // 16) * 16
+        if frame_size > MAX_STACK_FRAME:
+            raise ValueError("native stack frame exceeds its limit")
+        code.extend(bytes.fromhex("4881ec"))      # sub rsp, imm32
+        code.extend(struct.pack("<I", frame_size))
 
     for instruction in ir.instructions:
-        if type(instruction) is IRWrite:
+        if type(instruction) is IRConstI32:
+            code.extend(bytes.fromhex("c78424"))
+            code.extend(struct.pack("<I", _slot_disp(instruction.dest)))
+            code.extend(struct.pack("<i", instruction.value))
+        elif type(instruction) in (IRUnaryI32, IRBinaryI32):
+            _emit_checked_arithmetic(code, instruction, trap_fixups)
+        elif type(instruction) is IRWrite:
             output = instruction.data + (b"\n" if instruction.newline else b"")
             if not output:
                 continue
@@ -130,10 +236,14 @@ def _emit_program_code(ir):
         _patch_rel8(code, retry_branch, loop)
         _patch_rel8(code, fail_branch, fail_label)
         _patch_rel8(code, again_branch, loop)
-
         for position in call_fixups:
-            displacement = helper - (position + 4)
-            code[position:position + 4] = struct.pack("<i", displacement)
+            _patch_rel32(code, position, helper)
+
+    if trap_fixups:
+        panic_label = len(code)
+        code.extend(bytes.fromhex("b83c000000bf650000000f05"))  # exit(101)
+        for position in trap_fixups:
+            _patch_rel32(code, position, panic_label)
 
     for position, data_offset in lea_fixups:
         target = ELF_BASE + DATA_OFFSET + data_offset
