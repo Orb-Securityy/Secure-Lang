@@ -11,6 +11,7 @@ from securec.lexer import SecError
 from securec.native_x86_64 import compile_native_subset
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+MAX_NATIVE_SOURCE = 1 << 20
 HARDEN = ["-std=gnu11", "-fstack-protector-strong", "-fstack-clash-protection", "-fcf-protection=full",
           "-D_FORTIFY_SOURCE=2", "-fPIE", "-pie", "-fwrapv", "-fno-strict-aliasing",
           "-ftrivial-auto-var-init=zero", "-Wl,-z,relro,-z,now,-z,noexecstack", "-pthread"]
@@ -113,7 +114,10 @@ def native_build_file(path, output=None):
     """Build the experimental native subset without invoking C, GCC, or another linker."""
     try:
         with open(path, "rb") as source_file:
-            raw = source_file.read()
+            raw = source_file.read(MAX_NATIVE_SOURCE + 1)
+        if len(raw) > MAX_NATIVE_SOURCE:
+            print(f"error: native source exceeds the {MAX_NATIVE_SOURCE}-byte limit", file=sys.stderr)
+            return 1
         src = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         print(
