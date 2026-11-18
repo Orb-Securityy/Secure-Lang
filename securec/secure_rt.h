@@ -120,9 +120,19 @@ static inline T sec_shl_##N(T a, u64 b, const char *l) { \
     return (T)_uv; \
 } \
 static inline T sec_shr_##N(T a, u64 b, const char *l) { if (__builtin_expect(b >= (BITS), 0)) sec_panic("shift amount out of range", l); return (T)(a >> b); } \
-static inline T sec_wadd_##N(T a, T b) { return (T)((UT)a + (UT)b); } \
-static inline T sec_wsub_##N(T a, T b) { return (T)((UT)a - (UT)b); } \
-static inline T sec_wmul_##N(T a, T b) { return (T)(UT)((__uint128_t)(UT)a * (__uint128_t)(UT)b); } \
+/* Convert the low BITS of an unsigned wide value to T without an out-of-range unsigned-to-signed cast. */ \
+static inline T sec_wrap_##N(__uint128_t v) { \
+    __uint128_t _mask = (((__uint128_t)1 << (BITS)) - 1); \
+    UT _raw = (UT)(v & _mask); \
+    if ((MINV) < 0 && _raw > (UT)(MAXV)) { \
+        __int128 _signed = (__int128)_raw - ((__int128)1 << (BITS)); \
+        return (T)_signed; \
+    } \
+    return (T)_raw; \
+} \
+static inline T sec_wadd_##N(T a, T b) { return sec_wrap_##N((__uint128_t)(UT)a + (__uint128_t)(UT)b); } \
+static inline T sec_wsub_##N(T a, T b) { return sec_wrap_##N((__uint128_t)(UT)a - (__uint128_t)(UT)b); } \
+static inline T sec_wmul_##N(T a, T b) { return sec_wrap_##N((__uint128_t)(UT)a * (__uint128_t)(UT)b); } \
 static inline T sec_sadd_##N(T a, T b) { T r; if (__builtin_add_overflow(a, b, &r)) return ((MINV) < 0 && b < 0) ? (T)(MINV) : (T)(MAXV); return r; } \
 static inline T sec_ssub_##N(T a, T b) { T r; if (__builtin_sub_overflow(a, b, &r)) return (b > 0) ? (T)(MINV) : (T)(MAXV); return r; } \
 static inline T sec_smul_##N(T a, T b) { T r; if (__builtin_mul_overflow(a, b, &r)) return ((a < 0) != (b < 0)) ? (T)(MINV) : (T)(MAXV); return r; } \
