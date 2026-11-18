@@ -225,7 +225,11 @@ class Compiler:
                 self.err("array too large for the stack (limit 1 MiB); use `Vec<T>` for large buffers", n)
             return array(el, size)
         if k == "TPtr":
-            return ptr(self.rty(n.inner, selfty), n.mut)
+            # References are second-class values. Hiding one behind a raw
+            # pointer would make the reference escape the borrow-only call
+            # argument model and cannot represent a valid C pointer payload.
+            inner = self.storable(self.rty(n.inner, selfty), n.inner)
+            return ptr(inner, n.mut)
         self.err("invalid type", n)
 
     def validate_array_sizes(self, t, n):

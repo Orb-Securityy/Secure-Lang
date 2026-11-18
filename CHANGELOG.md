@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — references cannot hide behind raw pointers
+
+- Reject raw pointer types whose pointee recursively contains a second-class reference, keeping reference values confined to direct call arguments.
+- Add a compile-fail regression for a function parameter of type `*const &T`.
+
 ## Unreleased — target ABI contract
 
 - Enforce the 64-bit `usize`/pointer model and the scalar/`pthread_t` alignment assumptions used by conservative stack-size accounting.

@@ -1,0 +1,3 @@
+// EXPECT-ERR: references are second-class
+fn hidden(value: *const &i32) {}
+fn main() {}
