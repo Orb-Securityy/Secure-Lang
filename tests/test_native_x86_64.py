@@ -267,6 +267,89 @@ class NativeX8664Tests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_while_loops_update_mutable_i32_values(self):
+        source = (
+            'fn main() {\n'
+            '    let mut i: i32 = 0;\n'
+            '    let mut total: i32 = 0;\n'
+            '    while i < 5 {\n'
+            '        total += i;\n'
+            '        i += 1;\n'
+            '    }\n'
+            '    println(total, ":", i);\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'while-counter')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'10:5\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_nested_while_and_if_control_flow(self):
+        source = (
+            'fn main() {\n'
+            '    let mut outer: i32 = 0;\n'
+            '    let mut total: i32 = 0;\n'
+            '    while outer < 4 {\n'
+            '        let mut inner: i32 = 0;\n'
+            '        while inner < outer {\n'
+            '            if inner == 1 { total += 2; } else { total += 1; }\n'
+            '            inner += 1;\n'
+            '        }\n'
+            '        outer += 1;\n'
+            '    }\n'
+            '    println(total);\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'nested-loops')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'7\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_while_zero_iterations_and_loop_overflow_trap(self):
+        zero = 'fn main() { let mut i: i32 = 5; while i < 5 { i += 1; } println(i); }'
+        image = compile_native_subset(zero)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'zero-loop')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, b'5\n')
+            overflow = 'fn main() { let mut i: i32 = 2147483647; while i >= 0 { i += 1; } }'
+            path2 = os.path.join(directory, 'loop-overflow')
+            with open(path2, 'xb') as executable:
+                executable.write(compile_native_subset(overflow))
+            os.chmod(path2, 0o755)
+            trapped = subprocess.run([path2], capture_output=True, check=False)
+        self.assertEqual(trapped.returncode, 101, trapped.stderr)
+
+    def test_native_while_rejects_invalid_loop_conditions_and_immutable_stores(self):
+        unsupported = [
+            'fn main() { while true { println("bad"); } }',
+            'fn main() { let i: i32 = 0; while i < 2 { i += 1; } }',
+            'fn main() { let mut i: i32 = 0; while i < 2 { let x: str = "x"; x = "y"; } }',
+        ]
+        for source in unsupported:
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_mutable_i32_overflow_traps_with_101(self):
         source = 'fn main() { let mut n: i32 = 2147483647; n += 1; println(n); }'
         image = compile_native_subset(source)
