@@ -360,7 +360,7 @@ class NativeX8664Tests(unittest.TestCase):
             self.assertEqual(main(['native-build', source, '-o', output]), 0)
             result = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'total = 10\\n')
+        self.assertEqual(result.stdout, b'total = 10\n')
     def test_native_mutable_i32_overflow_traps_with_101(self):
         source = 'fn main() { let mut n: i32 = 2147483647; n += 1; println(n); }'
         image = compile_native_subset(source)
