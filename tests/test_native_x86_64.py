@@ -72,7 +72,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'17:42:255\\n')
+        self.assertEqual(result.stdout, b'17:42:255\n')
 
     def test_native_fixed_arrays_reject_mutation_of_immutable_arrays(self):
         source = 'fn main() { let values: [i32; 2] = [0; 2]; values[0] = 1; }'
