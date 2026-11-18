@@ -322,7 +322,8 @@ def lower_to_ir(items):
     def lower_for(node, bindings):
         instructions = ctx["instructions"]
         next_slot = ctx["next_slot"]
-        if node.var in bindings or node.var in constants or node.var in ("print", "println"):
+        if (node.var in bindings or node.var in constants or node.var in raw_functions
+                or node.var in ("print", "println")):
             _error(f"duplicate, reserved, or shadowed native loop variable `{node.var}`", node)
         if (_expression_kind(node.lo, bindings, constants, function_signatures) != "i32"
                 or _expression_kind(node.hi, bindings, constants, function_signatures) != "i32"):
