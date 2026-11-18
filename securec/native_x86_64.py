@@ -6,7 +6,7 @@ assembler, linker, or C runtime. It consumes only the shared immutable IR contra
 import struct
 
 from .ir import (IRArrayCreate, IRArrayLoadI32, IRArrayStoreI32, IRBinaryI32, IRCallI32,
-                 IRCompareBranch, IRConstI32, IRExit, IRFunction, IRJump, IRLabel,
+                 IRCompareBranch, IRConstI32, IRCopyI32, IRExit, IRFunction, IRJump, IRLabel,
                  IRLocalI32, IRParamI32, IRPrintI32, IRReadByte, IRReturnI32, IRStoreI32,
                  IRUnaryI32, IRValue, IRWrite, MAX_OUTPUT, MAX_NATIVE_ARGS,
                  MAX_NATIVE_ARRAY_BYTES, verify_ir)
@@ -259,7 +259,7 @@ def _emit_program_code(ir):
     def emit_stream(instructions, scope, is_entry, param_count):
         nonlocal needs_write_helper
         slot_types = (
-            IRConstI32, IRParamI32, IRLocalI32, IRUnaryI32,
+            IRConstI32, IRParamI32, IRLocalI32, IRCopyI32, IRUnaryI32,
             IRBinaryI32, IRCallI32, IRArrayLoadI32, IRReadByte,
         )
         slot_count = sum(type(ins) in slot_types for ins in instructions)
@@ -298,7 +298,7 @@ def _emit_program_code(ir):
                 code.extend(struct.pack("<i", instruction.value))
             elif type(instruction) is IRParamI32:
                 _emit_param_store(code, instruction.dest, instruction.index, frame_size)
-            elif type(instruction) is IRLocalI32:
+            elif type(instruction) in (IRLocalI32, IRCopyI32):
                 _emit_load_eax(code, instruction.initial.slot)
                 _emit_store_eax(code, instruction.dest)
             elif type(instruction) is IRArrayCreate:
