@@ -8,10 +8,9 @@ import sys
 import tempfile
 from securec import VERSION
 from securec.lexer import SecError
-from securec.native_lower import compile_native_subset
+from securec.native_lower import MAX_NATIVE_SOURCE, compile_native_subset
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MAX_NATIVE_SOURCE = 1 << 20
 HARDEN = ["-std=gnu11", "-fstack-protector-strong", "-fstack-clash-protection", "-fcf-protection=full",
           "-D_FORTIFY_SOURCE=2", "-fPIE", "-pie", "-fwrapv", "-fno-strict-aliasing",
           "-ftrivial-auto-var-init=zero", "-Wl,-z,relro,-z,now,-z,noexecstack", "-pthread"]
