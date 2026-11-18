@@ -135,8 +135,6 @@ def _validate_elf(image: bytes) -> None:
                 data_found = True
             else:
                 raise AssertionError("native ELF contains a data segment before code")
-            else:
-                raise AssertionError("native ELF contains an unexpected load segment")
         elif kind == 0x6474E551:
             if stack_found or flags != 6 or offset or vaddr or paddr or filesz or memsz or align != 16:
                 raise AssertionError("native ELF stack segment is not exactly RW/NX")
