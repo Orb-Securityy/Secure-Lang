@@ -34,8 +34,13 @@ _Static_assert(sizeof(i8) == 1 && sizeof(u8) == 1 &&
                sizeof(i32) == 4 && sizeof(u32) == 4 &&
                sizeof(i64) == 8 && sizeof(u64) == 8,
                "Secure bootstrap requires exact-width integer object sizes");
-_Static_assert(sizeof(usize) == 8 && sizeof(void *) == 8,
-               "Secure bootstrap requires a 64-bit size_t and pointer ABI");
+_Static_assert(sizeof(i8) == 1 && sizeof(u8) == 1 &&
+               sizeof(i16) == 2 && sizeof(u16) == 2 &&
+               sizeof(i32) == 4 && sizeof(u32) == 4 &&
+               sizeof(i64) == 8 && sizeof(u64) == 8 &&
+               sizeof(usize) == 8 && sizeof(void *) == 8 &&
+               sizeof(bool) == 1 && sizeof(f64) == 8,
+               "Secure bootstrap requires exact integer widths, 64-bit size_t/pointers, 1-byte bool and 8-byte f64");
 _Static_assert(_Alignof(bool) <= 8 &&
                _Alignof(i8) <= 8 && _Alignof(u8) <= 8 &&
                _Alignof(i16) <= 8 && _Alignof(u16) <= 8 &&
