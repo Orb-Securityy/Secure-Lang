@@ -193,9 +193,6 @@ def lower_to_ir(items):
         raise SecError("program has no `main` function", 1, 1)
     if main.params or main.ret is not None or main.unsafe or main.extern or main.body is None:
         _error("native backend requires a safe `fn main()` with no parameters or return type", main)
-    if main.body.tail is not None:
-        _error("native backend requires a statement-only `main` body", main.body)
-
     instructions = []
     next_slot = [0]
     next_label = [0]
@@ -247,8 +244,8 @@ def lower_to_ir(items):
             instructions.append(IRWrite(b"", True))
 
     def lower_block(block, outer_bindings):
-        if block.tail is not None:
-            _error("native blocks must be statement-only", block)
+        if block.tail is not None and block.tail.k != "If":
+            _error("native blocks only support `if` as a tail expression", block)
         bindings = dict(outer_bindings)
         for stmt in block.stmts:
             if stmt.k == "Let":
@@ -272,6 +269,8 @@ def lower_to_ir(items):
                 lower_if(stmt.e, bindings)
             else:
                 _error("native subset supports only immutable bindings, print calls, and if/else", stmt)
+        if block.tail is not None:
+            lower_if(block.tail, bindings)
 
     lower_block(main.body, {})
     instructions.append(IRExit(0))
