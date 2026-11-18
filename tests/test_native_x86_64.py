@@ -801,7 +801,7 @@ class NativeX8664Tests(unittest.TestCase):
 
     def test_native_source_rejects_too_many_user_functions(self):
         functions = "".join(
-            f"fn helper{i}() -> i32 {{ return 1; }}\\n"
+            f"fn helper{i}() -> i32 {{ return 1; }}\n"
             for i in range(MAX_NATIVE_FUNCTIONS + 1)
         )
         source = functions + "fn main() {}"
