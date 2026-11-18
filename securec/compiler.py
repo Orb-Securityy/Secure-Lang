@@ -2376,6 +2376,8 @@ class Compiler:
             c, t = self.expr(args[0], I32)
             if t != I32:
                 self.err("`exit` takes an `i32` status code", args[0])
+            # exit() terminates without reaching the function-scope Result check.
+            self.check_unhandled_results(self.scopes, n)
             self.drop_temps_on_exit()
             self.drops_down_to(0)
             self.emit(f"sec_exit({c});")
@@ -2383,6 +2385,9 @@ class Compiler:
         if nm == "panic":
             cs = self.lower_args([("m", False, ref(STR))], args, n)
             m = self.tmp("Slice_u8", cs[0])
+            # panic() is also a terminal path; validate all live Result bindings
+            # after evaluating its message argument but before leaving the scope.
+            self.check_unhandled_results(self.scopes, n)
             self.emit(f"sec_panic_str_raw({m}.p, {m}.n, {L});")
             return None, NEVER
         if nm == "assert":
