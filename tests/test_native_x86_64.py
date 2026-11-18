@@ -745,6 +745,15 @@ class NativeX8664Tests(unittest.TestCase):
                 with self.assertRaises(SecError):
                     compile_native_subset(source)
 
+    def test_native_source_rejects_too_many_user_functions(self):
+        functions = "".join(
+            f"fn helper{i}() -> i32 {{ return 1; }}\\n"
+            for i in range(MAX_NATIVE_FUNCTIONS + 1)
+        )
+        source = functions + "fn main() {}"
+        with self.assertRaises(SecError):
+            compile_native_subset(source)
+
     def test_native_ir_rejects_excessive_function_and_instruction_counts(self):
         too_many_functions = tuple(
             IRFunction(f"f{i}", 0, (IRReturnI32(IRValue(0)),))
