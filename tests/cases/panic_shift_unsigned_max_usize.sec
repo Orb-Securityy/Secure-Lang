@@ -1,0 +1,6 @@
+// EXPECT-PANIC: integer overflow in left shift
+fn shift(value: usize) -> usize { value << 63 }
+fn main() -> i32 {
+    let _result = shift(18446744073709551615usize);
+    return 0;
+}
