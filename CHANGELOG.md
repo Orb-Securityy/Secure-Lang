@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — defined signed wrapping conversions
+
+- Decode low-bit wrapping results through a signed wide intermediate already within the destination range, avoiding implementation-defined out-of-range unsigned-to-signed conversions.
+- Add exhaustive 8-bit and boundary tests for signed wrapping addition, subtraction, and multiplication across all integer widths.
+
 ## Unreleased — immutable str mutation regression coverage
 
 - Add compile-fail cases for indexed writes through mutable `str` bindings, mutable struct fields, and mutable borrows of `str` fields.
