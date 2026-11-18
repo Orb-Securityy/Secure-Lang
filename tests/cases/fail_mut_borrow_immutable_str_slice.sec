@@ -1,0 +1,8 @@
+// EXPECT-ERR: cannot borrow as mutable
+fn wipe(bytes: &mut [u8]) {
+    zeroize(bytes);
+}
+fn main() {
+    let mut value = "immutable";
+    wipe(&mut value[..]);
+}
