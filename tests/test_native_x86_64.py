@@ -9,7 +9,8 @@ import unittest
 from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
-from securec.native_x86_64 import (IRExit, IRProgram, IRWrite, compile_native_subset,\n                                  lower_to_ir, verify_ir)
+from securec.native_x86_64 import (IRExit, IRProgram, IRWrite, compile_native_subset,
+                                  lower_to_ir, verify_ir)
 
 
 class NativeX8664Tests(unittest.TestCase):
@@ -72,12 +73,12 @@ class NativeX8664Tests(unittest.TestCase):
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_static_str_bindings_and_constants_execute(self):
         source = (
-            'const GREETING: str = "Hello";\\n'
-            'fn main() {\\n'
-            '    let audience: str = "Secure";\\n'
-            '    let prefix = GREETING;\\n'
-            '    print(prefix, ", ");\\n'
-            '    println(audience, "!");\\n'
+            'const GREETING: str = "Hello";\n'
+            'fn main() {\n'
+            '    let audience: str = "Secure";\n'
+            '    let prefix = GREETING;\n'
+            '    print(prefix, ", ");\n'
+            '    println(audience, "!");\n'
             '}'
         )
         image = compile_native_subset(source)
@@ -88,7 +89,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'Hello, Secure!\\n')
+        self.assertEqual(result.stdout, b'Hello, Secure!\n')
 
     def test_native_subset_rejects_mutable_and_non_string_bindings(self):
         unsupported = [
