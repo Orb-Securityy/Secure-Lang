@@ -139,6 +139,7 @@ def compile_native_subset(source):
     """Parse, lower to verified IR, and emit a native ELF with the bootstrap frontend."""
     try:
         items = parse(source)
+        ir = lower_to_ir(items)
+        return emit_native(ir)
     except RecursionError as exc:
         raise SecError("source nesting exceeds the native backend limit", 0, 0) from exc
-    return emit_native(lower_to_ir(items))
