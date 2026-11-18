@@ -15,13 +15,14 @@ Keywords: `fn let mut if else while loop for in return break continue struct enu
 | `String` | owned growable byte string | **moves** |
 | `[T; N]` | fixed array, `N` constant, ≤ 1 MiB | if `T` is Copy |
 | `Vec<T>` | owned growable array | **moves** |
-| `Option<T>`, `Result<T,E>` | no null, no exceptions | if payloads are Copy |
+| `Option<T>` | no null value | if payload is Copy |
+| `Result<T,E>` | recoverable success/error; every direct binding must be handled | **moves (always affine)** |
 | `Task<T>` | handle to a running thread | **moves** |
 | `struct`, C-like `enum` | | Copy iff no field owns resources |
 | `&T`, `&mut T`, `&[T]`, `&mut [T]`, `&str` | **second-class** references (§6) | n/a |
 | `*const T`, `*mut T` | raw pointers; dereference only in `unsafe` | yes |
 
-Rule of thumb: a type that owns heap memory or a thread **moves**; everything else copies.
+Rule of thumb: types that own heap memory, thread handles, or a `Result` value **move**; aggregate types move whenever one of their members moves.
 There are no implicit conversions between numeric types. Integer literals default to `i32` unless the
 context fixes the type (`let x: u8 = 5;`, `a + 1`). Inference is local: `let v: Vec<i32> = Vec::new();`.
 
