@@ -130,7 +130,7 @@ def verify_ir(ir):
                 raise ValueError("native IR may only assign to a declared mutable local")
             if type(instruction.value) is not IRValue or type(instruction.value.slot) is not int:
                 raise ValueError("native mutable assignment requires an i32 slot reference")
-            uses[index].add(instruction.value.slot)
+            uses[index].update((instruction.dest, instruction.value.slot))
         elif type(instruction) is IRUnaryI32:
             if type(instruction.dest) is not int or instruction.dest != next_slot:
                 raise ValueError("native IR slots must be defined once in increasing order")
