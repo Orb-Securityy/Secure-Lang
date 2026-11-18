@@ -55,6 +55,62 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'1:2\n')
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_fixed_i32_and_u8_arrays_load_store(self):
+        image = compile_native_subset(
+            'fn main() { '
+            'let mut words: [i32; 4] = [0; 4]; '
+            'words[0] = 17; words[1] = 42; '
+            'let mut bytes: [u8; 2] = [0; 2]; bytes[1] = 255; '
+            'println(words[0], ":", words[1], ":", bytes[1]); }'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'fixed-arrays')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'17:42:255\\n')
+
+    def test_native_fixed_arrays_reject_mutation_of_immutable_arrays(self):
+        source = 'fn main() { let values: [i32; 2] = [0; 2]; values[0] = 1; }'
+        with self.assertRaises(SecError):
+            compile_native_subset(source)
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_fixed_array_bounds_and_u8_values_trap(self):
+        sources = (
+            'fn main() { let values: [i32; 2] = [0; 2]; println(values[2]); }',
+            'fn main() { let mut values: [u8; 2] = [0; 2]; values[1] = 256; }',
+            'fn main() { let mut values: [i32; 2] = [0; 2]; values[-1] = 7; }',
+        )
+        for index, source in enumerate(sources):
+            with self.subTest(source=source):
+                image = compile_native_subset(source)
+                with tempfile.TemporaryDirectory() as directory:
+                    path = os.path.join(directory, f'array-trap-{index}')
+                    with open(path, 'xb') as executable:
+                        executable.write(image)
+                    os.chmod(path, 0o755)
+                    result = subprocess.run([path], capture_output=True, check=False)
+                self.assertEqual(result.returncode, 101, result.stderr)
+
+    def test_native_fixed_arrays_reject_invalid_types_and_lengths(self):
+        sources = (
+            'fn main() { let values: [i64; 2] = [0; 2]; }',
+            'fn main() { let values: [i32; 2] = [0; 3]; }',
+            'fn main() { let values: [i32; 0] = [0; 0]; }',
+            'fn main() { let values: [i32; 2] = [0; 65537]; }',
+            'fn main() { let values: [i32; 2] = [0, 0]; }',
+        )
+        for source in sources:
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
+
     def test_native_read_byte_is_reserved_and_rejects_arguments(self):
         for source in (
             'fn read_byte() -> i32 { return 0; } fn main() { println(1); }',
