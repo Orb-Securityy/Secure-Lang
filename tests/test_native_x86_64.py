@@ -21,6 +21,54 @@ from securec.native_x86_64 import MAX_NATIVE_CODE, _write_elf64, emit_native
 
 
 class NativeX8664Tests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_read_byte_handles_binary_stdin_and_eof(self):
+        image = compile_native_subset(
+            'fn main() { println(read_byte(), ":", read_byte(), ":", '
+            'read_byte(), ":", read_byte()); }'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'read-byte')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run(
+                [path], input=bytes((0, 65, 255)), capture_output=True, check=False
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'0:65:255:-1\\n')
+
+    def test_native_read_byte_is_reserved_and_rejects_arguments(self):
+        for source in (
+            'fn read_byte() -> i32 { return 0; } fn main() { println(1); }',
+            'fn main() { println(read_byte(1)); }',
+            'const read_byte: i32 = 1; fn main() { println(1); }',
+        ):
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_secure_written_lexer_example_builds_and_tokenizes_stdin(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        source = os.path.join(root, 'examples', 'selfhost_lexer.sec')
+        with tempfile.TemporaryDirectory() as directory:
+            output = os.path.join(directory, 'secure-lexer')
+            self.assertEqual(main(['native-build', source, '-o', output]), 0)
+            result = subprocess.run(
+                [output], input=b'fn f() { let s = "ok"; }\\n',
+                capture_output=True, check=False
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout,
+            b'1:0:2\\n1:3:1\\n4:4:1:40\\n4:5:1:41\\n'
+            b'4:7:1:123\\n1:9:3\\n1:13:1\\n4:15:1:61\\n'
+            b'3:17:4\\n4:21:1:59\\n4:23:1:125\\n0:25:0\\n'
+        )
+
     def test_minimal_elf_header_and_segment_permissions(self):
         image = compile_native_subset('fn main() { println("Hello, World!"); }')
         self.assertEqual(image[:4], b'\x7fELF')
