@@ -974,7 +974,7 @@ class NativeX8664Tests(unittest.TestCase):
         expression = " + ".join(names)
         arguments = ", ".join(str(value) for value in range(1, 33))
         source = (
-            f"fn sum32({params}) -> i32 {{ return {expression}; }}\\n"
+            f"fn sum32({params}) -> i32 {{ return {expression}; }}\n"
             f"fn main() {{ println(sum32({arguments})); }}"
         )
         image = compile_native_subset(source)
@@ -985,7 +985,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'528\\n')
+        self.assertEqual(result.stdout, b'528\n')
 
     def test_native_functions_reject_bad_signatures_and_missing_returns(self):
         unsupported = [
