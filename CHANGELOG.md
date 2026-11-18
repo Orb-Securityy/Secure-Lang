@@ -3,7 +3,8 @@
 ## Unreleased — call argument evaluation order
 
 - Evaluate every by-value call argument before evaluating reference-place expressions, including index and slice-bound expressions.
-- Add a runtime regression proving side effects follow the documented call evaluation order.
+- Evaluate all reference-place expressions before forming any pointers, preventing a later argument from invalidating an earlier borrow through container reallocation.
+- Add runtime regressions for observable argument order and reallocation-safe borrow formation.
 
 ## 0.1.20 — atomic build output installation
 
