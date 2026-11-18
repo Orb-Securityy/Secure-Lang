@@ -74,6 +74,36 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'17:42:255\n')
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_secure_written_expression_parser_honors_precedence_and_parentheses(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        source = os.path.join(root, 'examples', 'selfhost_expr_parser.sec')
+        with tempfile.TemporaryDirectory() as directory:
+            output = os.path.join(directory, 'secure-expression-parser')
+            self.assertEqual(main(['native-build', source, '-o', output]), 0)
+            result = subprocess.run(
+                [output], input=b'10 + 2 * (3 + 4)', capture_output=True, check=False
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'24\\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_secure_written_expression_parser_rejects_invalid_input(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        source = os.path.join(root, 'examples', 'selfhost_expr_parser.sec')
+        with tempfile.TemporaryDirectory() as directory:
+            output = os.path.join(directory, 'secure-expression-parser')
+            self.assertEqual(main(['native-build', source, '-o', output]), 0)
+            for payload in (b'1 + * 2', b'(1 + 2', b'4 / 0', b'2147483648', b''):
+                with self.subTest(payload=payload):
+                    result = subprocess.run(
+                        [output], input=payload, capture_output=True, check=False
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, b'90\\n')
+
     def test_native_fixed_arrays_reject_mutation_of_immutable_arrays(self):
         source = 'fn main() { let values: [i32; 2] = [0; 2]; values[0] = 1; }'
         with self.assertRaises(SecError):
