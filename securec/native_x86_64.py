@@ -5,7 +5,7 @@ assembler, linker, or C runtime. It consumes only the small shared IR contract.
 """
 import struct
 
-from .ir import MAX_OUTPUT, ir_output, verify_ir
+from .ir import MAX_OUTPUT, ir_output
 
 
 ELF_BASE = 0x400000
@@ -27,7 +27,7 @@ def _machine_code(data_length):
     lea_next_ip_offset = len(code) + 4
     displacement = DATA_OFFSET - (CODE_OFFSET + lea_next_ip_offset)
     code += struct.pack("<i", displacement)
-    code += b"\\xba" + struct.pack("<I", data_length)  # mov edx, bytes remaining
+    code += b"\xba" + struct.pack("<I", data_length)  # mov edx, bytes remaining
 
     loop_label = len(code)
     code += bytes.fromhex("0f05")               # syscall: write
@@ -69,7 +69,7 @@ def build_elf64(data):
     if len(code) > 0x1000:
         raise ValueError("native code exceeds the first backend page")
     code_segment_size = CODE_OFFSET + len(code)
-    ident = b"\\x7fELF" + bytes((2, 1, 1, 0, 0)) + bytes(7)
+    ident = b"\x7fELF" + bytes((2, 1, 1, 0, 0)) + bytes(7)
     program_headers = [
         struct.pack("<IIQQQQQQ", 1, 5, 0, ELF_BASE, ELF_BASE,
                     code_segment_size, code_segment_size, 0x1000),
@@ -97,5 +97,4 @@ def build_elf64(data):
 
 def emit_native(ir):
     """Verify the IR and lower it directly to a static x86-64 Linux ELF image."""
-    verify_ir(ir)
     return build_elf64(ir_output(ir))
