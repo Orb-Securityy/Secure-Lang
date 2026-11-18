@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — call argument evaluation order
+
+- Evaluate every by-value call argument before evaluating reference-place expressions, including index and slice-bound expressions.
+- Add a runtime regression proving side effects follow the documented call evaluation order.
+
 ## 0.1.20 — atomic build output installation
 
 - Compile native executables in a temporary directory on the destination filesystem and install them with atomic replacement.
