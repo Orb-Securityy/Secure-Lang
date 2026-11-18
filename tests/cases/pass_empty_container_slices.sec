@@ -1,0 +1,14 @@
+// EXPECT-OUT: 0 0
+// Empty Vec and String slices must not form NULL + 0 in generated C.
+fn count_i32(values: &[i32]) -> usize {
+    values.len()
+}
+fn count_u8(values: &[u8]) -> usize {
+    values.len()
+}
+fn main() -> i32 {
+    let values: Vec<i32> = Vec::new();
+    let bytes = String::new();
+    println(count_i32(&values[0..0]), " ", count_u8(&bytes[0..0]));
+    return 0;
+}
