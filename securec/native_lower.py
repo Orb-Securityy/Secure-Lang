@@ -1,6 +1,6 @@
 """Python bootstrap frontend/lowering for the restricted native Secure subset."""
-from .ir import (IRBinaryI32, IRConstI32, IRExit, IRPrintI32, IRProgram,
-                 IRUnaryI32, IRValue, IRWrite)
+from .ir import (IRBinaryI32, IRBranchI32, IRConstI32, IRExit, IRJump, IRLabel,
+                 IRPrintI32, IRProgram, IRUnaryI32, IRValue, IRWrite)
 from .lexer import SecError
 from .native_x86_64 import emit_native
 from .parser import parse
@@ -9,6 +9,7 @@ from .parser import parse
 I32_MIN = -(1 << 31)
 I32_MAX = (1 << 31) - 1
 ARITHMETIC = ("+", "-", "*", "/", "%")
+COMPARISONS = ("==", "!=", "<", "<=", ">", ">=")
 
 
 def _error(message, node):
@@ -167,7 +168,7 @@ def _lower_i32(expr, bindings, constants, instructions, next_slot):
 
 
 def lower_to_ir(items):
-    """Type-check native str/i32 code and lower local integer arithmetic to IR."""
+    """Type-check native str/i32 code and lower expressions and conditionals to IR."""
     constants = {}
     main = None
     for item in items:
@@ -195,29 +196,42 @@ def lower_to_ir(items):
     if main.body.tail is not None:
         _error("native backend requires a statement-only `main` body", main.body)
 
-    bindings = {}
     instructions = []
     next_slot = [0]
-    for stmt in main.body.stmts:
-        if stmt.k == "Let":
-            if stmt.mut:
-                _error("native subset accepts only immutable `let` bindings", stmt)
-            if stmt.name in bindings or stmt.name in constants or stmt.name in ("print", "println"):
-                _error(f"duplicate, reserved, or shadowed native binding `{stmt.name}`", stmt)
-            inferred = _expression_kind(stmt.init, bindings, constants)
-            declared = _declared_kind(stmt.ty, stmt) if stmt.ty is not None else inferred
-            if declared != inferred:
-                _error("native binding type does not match its initializer", stmt)
-            if declared == "str":
-                value = _resolve_static_value(stmt.init, bindings, constants)
-                bindings[stmt.name] = value
+    next_label = [0]
+
+    def new_label():
+        label = next_label[0]
+        next_label[0] += 1
+        return label
+
+    def lower_if(node, bindings):
+        cond = node.cond
+        if cond.k != "Binary" or cond.op not in COMPARISONS:
+            _error("native `if` currently requires an i32 comparison", cond)
+        if (_expression_kind(cond.l, bindings, constants) != "i32"
+                or _expression_kind(cond.r, bindings, constants) != "i32"):
+            _error("native `if` comparisons require two i32 operands", cond)
+        left = _lower_i32(cond.l, bindings, constants, instructions, next_slot)
+        right = _lower_i32(cond.r, bindings, constants, instructions, next_slot)
+        then_label = new_label()
+        end_label = new_label()
+        else_label = new_label() if node.els is not None else end_label
+        instructions.append(IRBranchI32(cond.op, left, right, then_label, else_label))
+        instructions.append(IRLabel(then_label))
+        lower_block(node.then, bindings)
+        if node.els is not None:
+            instructions.append(IRJump(end_label))
+            instructions.append(IRLabel(else_label))
+            if node.els.k == "Block":
+                lower_block(node.els, bindings)
+            elif node.els.k == "If":
+                lower_if(node.els, bindings)
             else:
-                value = _lower_i32(stmt.init, bindings, constants, instructions, next_slot)
-                bindings[stmt.name] = ("i32", value)
-            continue
-        if stmt.k != "ExprStmt" or stmt.e.k != "Call":
-            _error("native subset supports only immutable bindings and print calls", stmt)
-        call = stmt.e
+                _error("unsupported native `else` body", node.els)
+        instructions.append(IRLabel(end_label))
+
+    def lower_print(call, bindings):
         if call.fn.k != "Var" or call.fn.name not in ("print", "println"):
             _error("native subset supports only `print` and `println`", call)
         for arg in call.args:
@@ -231,6 +245,35 @@ def lower_to_ir(items):
                 instructions.append(IRPrintI32(value, False))
         if call.fn.name == "println":
             instructions.append(IRWrite(b"", True))
+
+    def lower_block(block, outer_bindings):
+        if block.tail is not None:
+            _error("native blocks must be statement-only", block)
+        bindings = dict(outer_bindings)
+        for stmt in block.stmts:
+            if stmt.k == "Let":
+                if stmt.mut:
+                    _error("native subset accepts only immutable `let` bindings", stmt)
+                if stmt.name in bindings or stmt.name in constants or stmt.name in ("print", "println"):
+                    _error(f"duplicate, reserved, or shadowed native binding `{stmt.name}`", stmt)
+                inferred = _expression_kind(stmt.init, bindings, constants)
+                declared = _declared_kind(stmt.ty, stmt) if stmt.ty is not None else inferred
+                if declared != inferred:
+                    _error("native binding type does not match its initializer", stmt)
+                if declared == "str":
+                    value = _resolve_static_value(stmt.init, bindings, constants)
+                    bindings[stmt.name] = value
+                else:
+                    value = _lower_i32(stmt.init, bindings, constants, instructions, next_slot)
+                    bindings[stmt.name] = ("i32", value)
+            elif stmt.k == "ExprStmt" and stmt.e.k == "Call":
+                lower_print(stmt.e, bindings)
+            elif stmt.k == "ExprStmt" and stmt.e.k == "If":
+                lower_if(stmt.e, bindings)
+            else:
+                _error("native subset supports only immutable bindings, print calls, and if/else", stmt)
+
+    lower_block(main.body, {})
     instructions.append(IRExit(0))
     return IRProgram(tuple(instructions))
 
