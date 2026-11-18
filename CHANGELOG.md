@@ -1,23 +1,12 @@
 # Changelog
 
-## Unreleased — unsigned left-shift overflow
+## 0.1.21 — call ordering and backend arithmetic hardening
 
-- Use a full-width unsigned intermediate for unsigned left shifts, avoiding signed `__int128` overflow at extreme `u64`/`usize` values before the overflow check.
-- Widen wrapping multiplication to `__uint128_t` before multiplication, avoiding signed integer-promotion overflow for 8-/16-bit unsigned representations and preserving modulo semantics at 64 bits.
-- Preserve signed checked-shift behavior using a signed wide intermediate.
-- Add runtime regressions for `u64::MAX << 63` and `usize::MAX << 63`; UBSan verifies the guard itself performs no undefined operation.
-
-## Unreleased — empty slice pointer safety
-
-- Avoid undefined null-pointer arithmetic when forming empty slices from `Vec`, `String`, or an existing slice.
-- Add a sanitizer-backed regression for empty `Vec` and `String` ranges.
-
-## Unreleased — call argument evaluation order
-
-- Evaluate every by-value call argument before evaluating reference-place expressions, including index and slice-bound expressions.
-- Evaluate all reference-place expressions before forming any pointers, preventing a later argument from invalidating an earlier borrow through container reallocation.
-- Add runtime regressions for observable argument order and reallocation-safe borrow formation.
-
+- Enforce the documented three-phase call argument order: evaluate by-value arguments, evaluate every reference-place expression, then form borrowed pointers.
+- Prevent null-pointer arithmetic when creating empty slices from Vec, String, existing slices, and str views.
+- Use unsigned 128-bit intermediates for unsigned checked left shifts and wrapping multiplication, avoiding overflow in the safety checks themselves.
+- Add sanitizer-backed regressions for argument ordering, container reallocation during borrow preparation, empty slices, maximum-width unsigned shifts, and small-width wrapping multiplication.
+- Expand evidence with coverage-guided frontend fuzzing, deterministic differential arithmetic tests, ownership/borrow property tests, and GCC -fanalyzer.
 ## 0.1.20 — atomic build output installation
 
 - Compile native executables in a temporary directory on the destination filesystem and install them with atomic replacement.
