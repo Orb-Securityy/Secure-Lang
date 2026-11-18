@@ -9,8 +9,8 @@ import unittest
 from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
-from securec.native_x86_64 import (IRExit, IRProgram, IRWrite, compile_native_subset,
-                                  lower_to_ir, verify_ir)
+from securec.native_x86_64 import (MAX_OUTPUT, IRExit, IRProgram, IRWrite,
+                                  compile_native_subset, lower_to_ir, verify_ir)
 
 
 class NativeX8664Tests(unittest.TestCase):
@@ -120,6 +120,10 @@ class NativeX8664Tests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     verify_ir(ir)
 
+    def test_native_ir_rejects_output_larger_than_limit(self):
+        ir = IRProgram((IRWrite(b'x' * (MAX_OUTPUT + 1), False), IRExit(0)))
+        with self.assertRaises(ValueError):
+            verify_ir(ir)
     def test_native_ir_is_immutable_and_typed(self):
         ir = lower_to_ir(parse('fn main() { println("IR"); }'))
         self.assertIsInstance(ir, IRProgram)
@@ -130,6 +134,12 @@ class NativeX8664Tests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             main(['native-build', 'unused.sec', 'runtime-argument'])
 
+    def test_native_build_rejects_oversized_source_before_parsing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, 'oversized.sec')
+            with open(source, 'wb') as stream:
+                stream.write(b' ' * ((1 << 20) + 1))
+            self.assertEqual(main(['native-build', source]), 1)
     def test_native_build_never_overwrites_its_source(self):
         with tempfile.TemporaryDirectory() as directory:
             source = os.path.join(directory, 'program.sec')
