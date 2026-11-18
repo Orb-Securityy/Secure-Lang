@@ -26,7 +26,8 @@ typedef struct { char _; } sec_unit;
  * silently emitting code with incorrect range or stack-size assumptions. */
 _Static_assert(sizeof(usize) == 8 && sizeof(void *) == 8,
                "Secure bootstrap requires a 64-bit size_t and pointer ABI");
-_Static_assert(_Alignof(usize) <= 8 && _Alignof(void *) <= 8 && _Alignof(f64) <= 8,
+_Static_assert(_Alignof(i64) <= 8 && _Alignof(u64) <= 8 && _Alignof(usize) <= 8 &&
+               _Alignof(void *) <= 8 && _Alignof(f64) <= 8,
                "Secure bootstrap requires scalar alignment of at most 8 bytes");
 _Static_assert(sizeof(pthread_t) <= 16 && _Alignof(pthread_t) <= 8,
                "Secure stack accounting requires pthread_t size <= 16 and alignment <= 8");
