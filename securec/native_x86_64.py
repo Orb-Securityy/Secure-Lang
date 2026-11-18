@@ -14,6 +14,7 @@ ELF_BASE = 0  # position-independent image; Linux chooses the load base
 CODE_OFFSET = 0x1000
 DATA_OFFSET = 0x2000
 MAX_STACK_FRAME = 1 << 20
+SYSV_INTEGER_ARGUMENT_REGISTERS = 6
 
 
 def _patch_rel8(code, branch, target):
@@ -185,7 +186,7 @@ def _emit_param_store(code, slot, index, frame_size):
         code.extend(encodings[index])
         code.extend(struct.pack("<I", _slot_disp(slot)))
     else:
-        source_offset = frame_size + 8 + (index - len(encodings)) * 8
+        source_offset = frame_size + 8 + (index - SYSV_INTEGER_ARGUMENT_REGISTERS) * 8
         if source_offset > 0xFFFFFFFF:
             raise ValueError("native stack argument displacement is out of range")
         code.extend(bytes.fromhex("8b8424"))  # mov eax, dword [rsp + incoming stack arg]
@@ -225,19 +226,17 @@ def _emit_program_code(ir):
         nonlocal needs_write_helper
         slot_types = (IRConstI32, IRParamI32, IRLocalI32, IRUnaryI32, IRBinaryI32, IRCallI32)
         slot_count = sum(type(ins) in slot_types for ins in instructions)
-        needs_stack_buffer = any(type(ins) is IRPrintI32 for ins in instructions)
+        # The first 32 bytes are reserved for the integer formatter; slots
+        # begin at [rsp + 32] in both entry and ordinary function frames.
         local_bytes = 32 + slot_count * 4
-        if local_bytes:
-            if is_entry:
-                frame_size = ((local_bytes + 15) // 16) * 16
-            else:
-                # At a SysV function entry RSP is 8 mod 16. Reserve a frame
-                # that both covers locals and restores 16-byte call alignment.
-                frame_size = ((local_bytes + 8 + 15) // 16) * 16 - 8
-                if frame_size < local_bytes:
-                    frame_size += 16
+        if is_entry:
+            frame_size = ((local_bytes + 15) // 16) * 16
         else:
-            frame_size = 0
+            # At a SysV function entry RSP is 8 mod 16. Reserve a frame
+            # that both covers locals and restores 16-byte call alignment.
+            frame_size = ((local_bytes + 8 + 15) // 16) * 16 - 8
+            if frame_size < local_bytes:
+                frame_size += 16
         if frame_size > MAX_STACK_FRAME:
             raise ValueError("native stack frame exceeds its limit")
         if frame_size:
@@ -260,7 +259,7 @@ def _emit_program_code(ir):
             elif type(instruction) in (IRUnaryI32, IRBinaryI32):
                 _emit_checked_arithmetic(code, instruction, trap_fixups)
             elif type(instruction) is IRCallI32:
-                register_args = instruction.args[:MAX_NATIVE_ARGS if MAX_NATIVE_ARGS < 6 else 6]
+                register_args = instruction.args[:SYSV_INTEGER_ARGUMENT_REGISTERS]
                 stack_args = instruction.args[len(register_args):]
                 for index, argument in enumerate(register_args):
                     _emit_load_argument(code, argument.slot, index)
