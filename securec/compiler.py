@@ -59,6 +59,7 @@ class Tmp:
 class Loop:
     def __init__(self, depth, level):
         self.depth, self.level, self.breaks, self.conts = depth, level, [], []
+        self.result_breaks, self.result_conts = [], []
 
 
 def c_int(v, name):
@@ -87,6 +88,7 @@ class Compiler:
         self.audit = {"unsafe_blocks": [], "unsafe_fns": [], "extern_fns": []}
         self.uid = 0
         self.out, self.scopes, self.moved, self.loops, self.stmt_temps = [], [], set(), [], []
+        self.unused_results = set()
         self.fn_ret, self.cur_self, self.unsafe_depth, self.pre = UNIT, None, 0, {}
 
     # ------------------------------------------------------------------ utils
@@ -726,6 +728,8 @@ class Compiler:
         if self.needs_drop(ty):
             v.flag = f"l_{name}_{i}"
         self.scopes[-1].append(v)
+        if ty.k == "result":
+            self.unused_results.add(v)
         return v
 
     def decl_var(self, v, init):
@@ -798,10 +802,34 @@ class Compiler:
             r |= s
         return r
 
+    @staticmethod
+    def merge_pending_results(*states):
+        merged = set()
+        for state in states:
+            if state is not None:
+                merged.update(state)
+        return merged
+
+    def check_unhandled_results(self, scopes, n):
+        for scope in reversed(scopes):
+            for var in reversed(scope):
+                if var in self.unused_results:
+                    self.err(
+                        f"unused `Result` binding `{var.name}`; handle it with `match`, `?`, `unwrap()` or `unwrap_or()`",
+                        n,
+                    )
+
+    def mark_result_handled(self, place):
+        if place.k == "Var":
+            var = self.lookup(place.name)
+            if var is not None and var.ty.k == "result":
+                self.unused_results.discard(var)
+
     # --------------------------------------------------------------- functions
     def compile_fn(self, sig):
         n = sig.node
         self.out, self.scopes, self.moved, self.loops, self.stmt_temps = [], [[]], set(), [], []
+        self.unused_results = set()
         self.fn_ret, self.cur_self, self.unsafe_depth = sig.ret, sig.selfty, (1 if sig.unsafe else 0)
         names = []
         for pn, pm, pt in sig.params:
@@ -816,6 +844,7 @@ class Compiler:
             where = n.body.tail or n.body
             self.err(f"mismatched types: function `{sig.name}` must return `{tstr(ret)}` on every path, "
                      f"but its body has type `{tstr(bt)}`", where)
+        self.check_unhandled_results([self.scopes[0]], n)
         self.emit("{")
         self.out.extend(lines)
         self.emit("}")
@@ -857,6 +886,7 @@ class Compiler:
             if self.needs_drop(tt):
                 self.take_temp(tc)
         self.drop_temps(mark)
+        self.check_unhandled_results([self.scopes[-1]], n)
         if self.moved is not None:
             self.drop_scope(self.scopes[-1])
         self.pop()
@@ -1124,7 +1154,10 @@ class Compiler:
                 if self.moved is not None and v in self.moved:
                     self.err(f"use of moved value `{nm}`", n)
                 return v.c, v.ty
-            return self.consume(self.place(n), n)
+            value, ty = self.consume(self.place(n), n)
+            if v.ty.k == "result":
+                self.unused_results.discard(v)
+            return value, ty
         if nm in self.consts:
             ty, val = self.consts[nm]
             if ty.k == "int": return c_int(val, ty.name), ty
@@ -1291,9 +1324,14 @@ class Compiler:
             self.err(f"`{n.op}` needs `bool` operands, found `{tstr(lt)}`", n.l)
         r = self.tmp("bool", lc)
         s0 = self.snap()
+        # The right operand is conditional: short-circuiting may skip every
+        # side effect in it. A Result consumed only on the RHS therefore
+        # remains unhandled on the path where the RHS is not evaluated.
+        results0 = set(self.unused_results)
         self.emit(f"if ({'' if n.op == '&&' else '!'}{r}) {{")
         mark = len(self.stmt_temps)
         rc, rt = self.expr(n.r, BOOL)
+        results1 = set(self.unused_results)
         if rt.k != "never":
             if rt != BOOL:
                 self.err(f"`{n.op}` needs `bool` operands, found `{tstr(rt)}`", n.r)
@@ -1301,6 +1339,7 @@ class Compiler:
         self.drop_temps(mark)
         self.emit("}")
         self.moved = self.merge(self.snap() if self.moved is not None else s0, s0)
+        self.unused_results = self.merge_pending_results(results0, results1)
         return r, BOOL
 
     # ---- assignment
@@ -1319,6 +1358,8 @@ class Compiler:
         if v is not None:
             if v.ty.k == "ref":
                 self.err(f"cannot assign to the reference parameter `{v.name}` itself; use `*{v.name} = ...`", tgt)
+            if v.ty.k == "result" and v in self.unused_results:
+                self.err(f"cannot overwrite unhandled `Result` binding `{v.name}`", tgt)
             if not v.mut:
                 self.err(f"cannot assign to immutable variable `{v.name}` (declare it with `let mut`)", tgt)
             lv, ty = v.c, v.ty
@@ -1334,6 +1375,8 @@ class Compiler:
                     self.emit(f"{v.flag} = true;")
                     if self.moved is not None:
                         self.moved.discard(v)
+                if v.ty.k == "result":
+                    self.unused_results.add(v)
                 return "SEC_UNIT", UNIT
             if self.moved is not None and v in self.moved:
                 self.err(f"use of moved value `{v.name}`", tgt)
@@ -1426,22 +1469,28 @@ class Compiler:
             self.err(f"`if` condition must be `bool`, found `{tstr(ct)}`", n.cond)
         self.drop_temps(mark)
         s0 = self.snap()
+        results0 = set(self.unused_results)
         dest = f"_r{self.newid()}"
         l1, t1 = self.block(n.then, expected, dest)
         st1 = self.moved
+        results1 = set(self.unused_results)
         if n.els is None:
             if t1.k not in ("unit", "never"):
                 self.err("`if` without `else` must have type `()`", n.then)
             self.moved = self.merge(st1, s0)
+            self.unused_results = self.merge_pending_results(results0, results1)
             self.emit(f"if ({cc}) {{")
             self.out.extend(l1)
             self.emit("}")
             return "SEC_UNIT", UNIT
         self.moved = None if s0 is None else set(s0)
+        self.unused_results = set(results0)
         els = n.els if n.els.k == "Block" else N("Block", (n.els.line, n.els.col), stmts=[], tail=n.els)
         exp2 = t1 if t1.k not in ("unit", "never") else expected
         l2, t2 = self.block(els, exp2, dest)
         st2 = self.moved
+        results2 = set(self.unused_results)
+        self.unused_results = self.merge_pending_results(results1, results2)
         if t1.k == "never":
             t = t2
         elif t2.k == "never" or t1 == t2:
@@ -1477,8 +1526,10 @@ class Compiler:
         if ct != BOOL:
             self.err(f"`while` condition must be `bool`, found `{tstr(ct)}`", n.cond)
         self.drop_temps(mark)
+        results0 = set(self.unused_results)
         self.emit(f"if (!{cc}) break;")
         lines, bt = self.block(n.body, UNIT, None)
+        results_body = set(self.unused_results)
         self.loop_finish(lp, s0, self.moved, n)
         self.emit("{")
         self.out.extend(lines)
@@ -1486,6 +1537,9 @@ class Compiler:
         self.emit("}")
         self.loops.pop()
         self.moved = self.merge(s0, *lp.breaks)
+        self.unused_results = self.merge_pending_results(
+            results0, results_body, *lp.result_breaks, *lp.result_conts
+        )
         return "SEC_UNIT", UNIT
 
     def e_Loop(self, n, expected, allow_ref):
@@ -1502,8 +1556,10 @@ class Compiler:
         self.loops.pop()
         if not lp.breaks:
             self.moved = None
+            self.unused_results = set()
             return None, NEVER
         self.moved = self.merge(*lp.breaks)
+        self.unused_results = self.merge_pending_results(*lp.result_breaks)
         return "SEC_UNIT", UNIT
 
     def e_For(self, n, expected, allow_ref):
@@ -1517,6 +1573,7 @@ class Compiler:
             self.err(f"range bounds must be the same integer type, found `{tstr(lt)}` and `{tstr(ht)}`", n)
         T = lt.name
         s0 = self.snap()
+        results0 = set(self.unused_results)
         lp = Loop(len(self.scopes), len(self.loops) + 1)
         self.loops.append(lp)
         k = f"_k{self.newid()}"
@@ -1528,6 +1585,7 @@ class Compiler:
             self.emit(f"for ({T} {k} = {lc}; {k} < {hc}; {k}++) {{")
             init = k
         lines, bt = self.block(n.body, UNIT, None, binds=[(n.var, lt, init, False)])
+        results_body = set(self.unused_results)
         self.loop_finish(lp, s0, self.moved, n)
         self.emit("{")
         self.out.extend(lines)
@@ -1535,13 +1593,18 @@ class Compiler:
         self.emit("}")
         self.loops.pop()
         self.moved = self.merge(s0, *lp.breaks)
+        self.unused_results = self.merge_pending_results(
+            results0, results_body, *lp.result_breaks, *lp.result_conts
+        )
         return "SEC_UNIT", UNIT
 
     def e_Break(self, n, expected, allow_ref):
         if not self.loops:
             self.err("`break` outside of a loop", n)
         lp = self.loops[-1]
+        self.check_unhandled_results(self.scopes[lp.depth:], n)
         lp.breaks.append(self.snap())
+        lp.result_breaks.append(set(self.unused_results))
         self.drop_temps_on_exit(deeper_than=lp.depth)
         self.drops_down_to(lp.depth)
         self.emit("break;")
@@ -1551,7 +1614,9 @@ class Compiler:
         if not self.loops:
             self.err("`continue` outside of a loop", n)
         lp = self.loops[-1]
+        self.check_unhandled_results(self.scopes[lp.depth:], n)
         lp.conts.append(self.snap())
+        lp.result_conts.append(set(self.unused_results))
         self.drop_temps_on_exit(deeper_than=lp.depth)
         self.drops_down_to(lp.depth)
         self.emit("continue;")
@@ -1562,6 +1627,7 @@ class Compiler:
         if n.e is None:
             if rt != UNIT:
                 self.err(f"`return;` in a function returning `{tstr(rt)}`", n)
+            self.check_unhandled_results(self.scopes, n)
             self.drop_temps_on_exit()
             self.drops_down_to(0)
             self.emit("return;")
@@ -1571,6 +1637,7 @@ class Compiler:
             return None, NEVER
         if t != rt:
             self.err(f"mismatched types: function returns `{tstr(rt)}`, found `{tstr(t)}`", n.e)
+        self.check_unhandled_results(self.scopes, n)
         if rt.k == "unit":
             self.drop_temps_on_exit()
             self.drops_down_to(0)
@@ -1594,6 +1661,7 @@ class Compiler:
             # on the error path or to the value produced below on the success path.
             self.take_temp(r)
         if t.k == "result" and fr.k == "result" and t.args[1] == fr.args[1]:
+            self.check_unhandled_results(self.scopes, n)
             self.emit(f"if (!{r}.ok) {{")
             self.drop_temps_on_exit()
             self.drops_down_to(0)
@@ -1601,6 +1669,7 @@ class Compiler:
             self.emit("}")
             vt = t.args[0]
         elif t.k == "option" and fr.k == "option":
+            self.check_unhandled_results(self.scopes, n)
             self.emit(f"if (!{r}.some) {{")
             self.drop_temps_on_exit()
             self.drops_down_to(0)
@@ -1631,8 +1700,9 @@ class Compiler:
             self.take_temp(s)
         L = self.loc(n)
         s0 = self.snap()
+        results0 = set(self.unused_results)
         dest = f"_r{self.newid()}"
-        arms, states, rtype, covered = [], [], None, set()
+        arms, states, result_states, rtype, covered = [], [], [], None, set()
         for pats, body, ap in n.arms:
             if len(pats) > 1 and any(p[0] not in ("lit", "enum") for p in pats):
                 raise SecError("alternatives (`|`) are only supported between literal and enum patterns", ap[0], ap[1])
@@ -1644,6 +1714,7 @@ class Compiler:
                 prelude += pre1
                 covered.add(cov)
             self.moved = None if s0 is None else set(s0)
+            self.unused_results = set(results0)
             lines, bt = self.block(body, expected if expected is not None else rtype, dest, binds=binds)
             if bt.k != "never":
                 if rtype is None:
@@ -1651,8 +1722,10 @@ class Compiler:
                 elif rtype != bt:
                     self.err(f"`match` arms have incompatible types: `{tstr(rtype)}` and `{tstr(bt)}`", body)
             states.append(self.moved)
+            result_states.append(set(self.unused_results))
             arms.append((" || ".join(f"({c})" for c in conds), prelude + lines))
         self.moved = self.merge(*states)
+        self.unused_results = self.merge_pending_results(*result_states)
         if "ALL" not in covered:
             if st.k == "option": need = {("c", "Some"), ("c", "None")}
             elif st.k == "result": need = {("c", "Ok"), ("c", "Err")}
@@ -2222,6 +2295,7 @@ class Compiler:
             if name == "unwrap":
                 noargs()
                 c, _ = self.consume(self.place_(recv), recv)
+                self.mark_result_handled(recv)
                 self.emit(f'if (!{c}.ok) sec_panic("called `unwrap()` on an `Err` value", {L});')
                 return unit_or(el, f"{c}.v")
             if name == "unwrap_or":
@@ -2231,6 +2305,7 @@ class Compiler:
                 if dt != el:
                     self.err(f"mismatched types: expected `{tstr(el)}`, found `{tstr(dt)}`", args[0])
                 c, _ = self.consume(self.place_(recv), recv)
+                self.mark_result_handled(recv)
                 r = self.tmp(self.ctype(el), f"{c}.ok ? {c}.v : {dc}")
                 if self.needs_drop(t.args[1]):
                     self.emit(f"if (!{c}.ok) {self.drop_stmt(t.args[1], c + '.e')}")
