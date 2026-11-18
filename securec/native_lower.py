@@ -208,6 +208,7 @@ def lower_to_ir(items):
         elif item.k != "Const":
             _error("native subset accepts only constants and function declarations", item)
 
+    constant_names = {item.name for item in items if item.k == "Const"}
     main = raw_functions.get("main")
     if main is None:
         raise SecError("program has no `main` function", 1, 1)
@@ -224,7 +225,7 @@ def lower_to_ir(items):
             _error(f"native functions support at most {MAX_NATIVE_ARGS} i32 parameters (first six in registers, remaining on stack)", function)
         seen_params = set()
         for parameter in function.params:
-            if (parameter.name in seen_params or parameter.name in constants
+            if (parameter.name in seen_params or parameter.name in constant_names
                     or parameter.name in raw_functions
                     or parameter.name in ("print", "println")
                     or not _is_i32_type(parameter.ty)):
