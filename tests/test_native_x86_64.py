@@ -880,6 +880,19 @@ class NativeX8664Tests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify_ir(IRProgram((IRExit(0),), (oversized_function,)))
 
+    def test_native_ir_worklist_keeps_initial_entry_path_in_definite_assignment(self):
+        invalid = IRProgram((
+            IRLabel(0),
+            IRCompareBranch(IRValue(0), "<", IRValue(0), 1, 2),
+            IRLabel(1),
+            IRConstI32(0, 1),
+            IRJump(0),
+            IRLabel(2),
+            IRExit(0),
+        ))
+        with self.assertRaises(ValueError):
+            verify_ir(invalid)
+
     def test_native_ir_verifier_rejects_malformed_function_contracts(self):
         valid_fn = IRFunction(
             "identity", 1,
