@@ -1,4 +1,4 @@
-"""Command line driver: securec {build,run,check,emit-c,audit} file.sec"""
+"""Command line driver: securec {build,run,check,emit-c,audit,native-build} file.sec"""
 import argparse
 import hashlib
 import json
