@@ -94,6 +94,11 @@ def _expression_kind(expr, bindings, constants):
             return constants[expr.name][0]
         _error(f"unknown native variable `{expr.name}`", expr)
     if expr.k == "Unary" and expr.op == "-":
+        if expr.e.k == "Int":
+            if expr.e.suf not in (None, "i32"):
+                _error("native subset currently supports only i32 integer literals", expr.e)
+            _checked_i32(-expr.e.val, expr)
+            return "i32"
         if _expression_kind(expr.e, bindings, constants) != "i32":
             _error("unary minus requires an i32 value", expr)
         return "i32"
