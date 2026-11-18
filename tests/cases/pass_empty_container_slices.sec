@@ -1,14 +1,25 @@
-// EXPECT-OUT: 0 0
-// Empty Vec and String slices must not form NULL + 0 in generated C.
+// EXPECT-OUT: 0 0 0 0
+// Empty Vec, String, slice, and &str ranges must not form NULL + 0.
 fn count_i32(values: &[i32]) -> usize {
     values.len()
 }
 fn count_u8(values: &[u8]) -> usize {
     values.len()
 }
+fn count_empty_subslice(values: &[i32]) -> usize {
+    count_i32(&values[0..0])
+}
+fn count_empty_str_slice(value: &str) -> usize {
+    count_u8(&value[0..0])
+}
 fn main() -> i32 {
     let values: Vec<i32> = Vec::new();
     let bytes = String::new();
-    println(count_i32(&values[0..0]), " ", count_u8(&bytes[0..0]));
+    println(
+        count_i32(&values[0..0]), " ",
+        count_u8(&bytes[0..0]), " ",
+        count_empty_subslice(&values[0..0]), " ",
+        count_empty_str_slice(bytes.as_str())
+    );
     return 0;
 }
