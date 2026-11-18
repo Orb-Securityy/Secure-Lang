@@ -1,0 +1,14 @@
+// EXPECT-OUT: -1 -32768 127 -1
+// Explicit wrapping casts keep the low destination bits with two's-complement decoding.
+fn main() -> i32 {
+    let u8_value: u8 = 255u8;
+    let as_i8 = u8_value as wrapping i8;
+    let u16_value: u16 = 32768u16;
+    let as_i16 = u16_value as wrapping i16;
+    let negative: i64 = -129i64;
+    let as_small = negative as wrapping i8;
+    let max: u64 = 18446744073709551615u64;
+    let as_i64 = max as wrapping i64;
+    println(as_i8, " ", as_i16, " ", as_small, " ", as_i64);
+    return 0;
+}
