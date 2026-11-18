@@ -1,8 +1,11 @@
 """Python bootstrap frontend/lowering for the restricted native Secure subset."""
-from .ir import (IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRCopyI32, IRExit, IRFunction, IRJump,
-                 IRLabel, IRLocalI32, IRParamI32, IRPrintI32, IRProgram, IRReadByte, IRReturnI32,
-                 IRStoreI32, IRUnaryI32, IRValue, IRWrite, MAX_NATIVE_ARGS,
-                 MAX_NATIVE_CONSTANTS, MAX_NATIVE_FUNCTIONS, MAX_NATIVE_INSTRUCTIONS)
+from .ir import (IRArrayCreate, IRArrayLoadI32, IRArrayStoreI32, IRBinaryI32, IRCallI32,
+                 IRCompareBranch, IRConstI32, IRCopyI32, IRExit, IRFunction, IRJump,
+                 IRLabel, IRLocalI32, IRParamI32, IRPrintI32, IRProgram, IRReadByte,
+                 IRReturnI32, IRStoreI32, IRUnaryI32, IRValue, IRWrite,
+                 MAX_NATIVE_ARGS, MAX_NATIVE_ARRAYS, MAX_NATIVE_ARRAY_BYTES,
+                 MAX_NATIVE_ARRAY_LENGTH, MAX_NATIVE_CONSTANTS, MAX_NATIVE_FUNCTIONS,
+                 MAX_NATIVE_INSTRUCTIONS)
 from .lexer import SecError
 from .native_x86_64 import emit_native
 from .parser import parse
@@ -117,6 +120,15 @@ def _expression_kind(expr, bindings, constants, function_signatures=None):
                 or _expression_kind(expr.r, bindings, constants, function_signatures) != "i32"):
             _error("native integer arithmetic requires two i32 operands", expr)
         return "i32"
+    if expr.k == "Index":
+        if expr.e.k != "Var":
+            _error("native array indexing requires a local fixed array", expr)
+        binding = bindings.get(expr.e.name)
+        if binding is None or binding[0] != "array":
+            _error("native index target is not a fixed array", expr.e)
+        if _expression_kind(expr.idx, bindings, constants, function_signatures) != "i32":
+            _error("native array index must be i32", expr.idx)
+        return "i32"
     if expr.k == "Call":
         if expr.fn.k == "Var" and expr.fn.name == "read_byte":
             if expr.args:
@@ -186,6 +198,18 @@ def _lower_i32(expr, bindings, constants, instructions, next_slot, function_sign
         dest = next_slot[0]
         next_slot[0] += 1
         instructions.append(IRBinaryI32(dest, expr.op, left, right))
+        return IRValue(dest)
+    if expr.k == "Index":
+        if expr.e.k != "Var":
+            _error("native array indexing requires a local fixed array", expr)
+        binding = bindings.get(expr.e.name)
+        if binding is None or binding[0] != "array":
+            _error("native index target is not a fixed array", expr.e)
+        index = _lower_i32(expr.idx, bindings, constants, instructions, next_slot,
+                           function_signatures)
+        dest = next_slot[0]
+        next_slot[0] += 1
+        instructions.append(IRArrayLoadI32(dest, binding[1], index))
         return IRValue(dest)
     if expr.k == "Call":
         if expr.fn.k == "Var" and expr.fn.name == "read_byte":
@@ -433,6 +457,41 @@ def lower_to_ir(items):
                 if (stmt.name in bindings or stmt.name in constants
                         or stmt.name in raw_functions or stmt.name in ("print", "println", "read_byte")):
                     _error(f"duplicate, reserved, or shadowed native binding `{stmt.name}`", stmt)
+                if stmt.ty is not None and stmt.ty.k == "TArr":
+                    if stmt.init.k != "ArrayRep":
+                        _error("native fixed arrays require a repeated initializer such as [0; 8]", stmt.init)
+                    elem_type = stmt.ty.elem
+                    if elem_type.k != "TName" or elem_type.args or elem_type.name not in ("i32", "u8"):
+                        _error("native fixed arrays support only i32 and u8 elements", elem_type)
+                    declared_length = _resolve_static_value(stmt.ty.size, {}, constants)
+                    repeated_length = _resolve_static_value(stmt.init.count, {}, constants)
+                    if (declared_length[0] != "i32" or repeated_length[0] != "i32"
+                            or declared_length[1] != repeated_length[1]):
+                        _error("native fixed array type and initializer lengths must match", stmt)
+                    length = declared_length[1]
+                    if not 1 <= length <= MAX_NATIVE_ARRAY_LENGTH:
+                        _error(f"native fixed arrays must contain 1..{MAX_NATIVE_ARRAY_LENGTH} elements", stmt)
+                    element_size = 1 if elem_type.name == "u8" else 4
+                    initial_kind, initial_value = _resolve_static_value(stmt.init.elem, bindings, constants)
+                    if initial_kind != "i32":
+                        _error("native fixed array elements must be i32-compatible integer constants", stmt.init.elem)
+                    if element_size == 1 and not 0 <= initial_value <= 255:
+                        _error("native u8 array initializer is out of range", stmt.init.elem)
+                    if ctx["next_array"][0] >= MAX_NATIVE_ARRAYS:
+                        _error(f"native functions support at most {MAX_NATIVE_ARRAYS} fixed arrays", stmt)
+                    total_bytes = ctx["array_bytes"][0] + length * element_size
+                    if total_bytes > MAX_NATIVE_ARRAY_BYTES:
+                        _error(f"native fixed arrays exceed the {MAX_NATIVE_ARRAY_BYTES}-byte stack budget", stmt)
+                    initial_slot = _emit_const(initial_value, ctx["instructions"], ctx["next_slot"])
+                    array_id = ctx["next_array"][0]
+                    ctx["next_array"][0] += 1
+                    ctx["array_bytes"][0] = total_bytes
+                    ctx["instructions"].append(
+                        IRArrayCreate(array_id, length, element_size, stmt.mut, initial_slot)
+                    )
+                    bindings[stmt.name] = ("array", array_id, length, element_size, stmt.mut)
+                    _check_instruction_budget(ctx["instructions"], stmt, ctx["instruction_budget"])
+                    continue
                 inferred = _expression_kind(stmt.init, bindings, constants, function_signatures)
                 declared = _declared_kind(stmt.ty, stmt) if stmt.ty is not None else inferred
                 if declared != inferred:
@@ -469,8 +528,26 @@ def lower_to_ir(items):
                                ctx["next_slot"], function_signatures)
             elif stmt.k == "ExprStmt" and stmt.e.k == "Assign":
                 assignment = stmt.e
+                if assignment.target.k == "Index":
+                    target = assignment.target
+                    if target.e.k != "Var":
+                        _error("native array assignment requires a local fixed array", target)
+                    binding = bindings.get(target.e.name)
+                    if binding is None or binding[0] != "array":
+                        _error("native array assignment target is not a fixed array", target.e)
+                    if binding[4] is not True:
+                        _error("native array assignment requires a mutable array", target.e)
+                    if assignment.op != "=":
+                        _error("native array elements support direct assignment only", assignment)
+                    index = _lower_i32(target.idx, bindings, constants, ctx["instructions"],
+                                       ctx["next_slot"], function_signatures)
+                    value = _lower_i32(assignment.value, bindings, constants, ctx["instructions"],
+                                       ctx["next_slot"], function_signatures)
+                    ctx["instructions"].append(IRArrayStoreI32(binding[1], index, value))
+                    _check_instruction_budget(ctx["instructions"], stmt, ctx["instruction_budget"])
+                    continue
                 if assignment.target.k != "Var":
-                    _error("native assignment target must be a local variable", assignment.target)
+                    _error("native assignment target must be a local variable or array element", assignment.target)
                 binding = bindings.get(assignment.target.name)
                 if binding is None or binding[0] != "i32" or len(binding) < 3 or binding[2] is not True:
                     _error("native assignment requires a mutable i32 local or parameter", assignment.target)
@@ -539,6 +616,7 @@ def lower_to_ir(items):
 
     # Compile the entry function first; its calls may refer forward to any declaration.
     ctx = {"instructions": [], "next_slot": [0], "next_label": [0],
+           "next_array": [0], "array_bytes": [0],
            "loop_stack": [], "allow_return": False,
            "instruction_budget": MAX_NATIVE_INSTRUCTIONS}
     lower_block(main.body, {})
@@ -554,6 +632,7 @@ def lower_to_ir(items):
         if remaining_budget <= 0:
             _error(f"native lowering exceeds the {MAX_NATIVE_INSTRUCTIONS}-instruction program limit", function)
         ctx = {"instructions": [], "next_slot": [0], "next_label": [0],
+               "next_array": [0], "array_bytes": [0],
                "loop_stack": [], "allow_return": True,
                "instruction_budget": remaining_budget}
         bindings = {}
