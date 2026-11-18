@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from securec.lexer import SecError
+from securec.driver import main
 from securec.native_x86_64 import compile_native_subset
 
 
@@ -23,14 +24,20 @@ class NativeX8664Tests(unittest.TestCase):
         e_phentsize, e_phnum = struct.unpack_from('<HH', image, 54)
         self.assertEqual(e_phoff, 64)
         self.assertEqual(e_phentsize, 56)
-        self.assertEqual(e_phnum, 2)
+        self.assertEqual(e_phnum, 3)
         headers = [struct.unpack_from('<IIQQQQQQ', image, e_phoff + i * e_phentsize)
                    for i in range(e_phnum)]
-        load = next(h for h in headers if h[0] == 1)
+        loads = [h for h in headers if h[0] == 1]
         stack = next(h for h in headers if h[0] == 0x6474E551)
-        self.assertEqual(load[1], 5)  # PF_R | PF_X, never writable
-        self.assertEqual(stack[1] & 1, 0)  # stack is not executable
-        self.assertEqual(load[5], len(image))
+        self.assertEqual(len(loads), 2)
+        code, rodata = loads
+        self.assertEqual(code[1], 5)    # PF_R | PF_X
+        self.assertEqual(rodata[1], 4)  # PF_R only; literals are not executable
+        self.assertEqual(code[5], 0x1000 + 50)
+        self.assertEqual(rodata[2], 0x2000)
+        self.assertGreater(rodata[5], 0)
+        self.assertEqual(stack[1], 6)   # PF_R | PF_W, never executable
+        self.assertTrue(all(not (h[1] & 2 and h[1] & 1) for h in loads))
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
@@ -47,6 +54,19 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'Hello, World!\nNative ELF\n')
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_build_cli_produces_executable_without_cc_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, 'hello.sec')
+            output = os.path.join(directory, 'hello')
+            with open(source, 'w', encoding='utf-8') as stream:
+                stream.write('fn main() { println("Built by Secure"); }')
+            self.assertEqual(main(['native-build', source, '-o', output]), 0)
+            self.assertTrue(os.stat(output).st_mode & 0o111)
+            result = subprocess.run([output], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'Built by Secure\\n')
     def test_rejects_constructs_outside_the_native_subset(self):
         unsupported = [
             'fn main() { let x: i32 = 1; }',
