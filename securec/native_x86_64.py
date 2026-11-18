@@ -124,7 +124,7 @@ def verify_ir(ir):
 
 def _ir_output(ir):
     verify_ir(ir)
-    return b"".join(ins.data + (b"\\n" if ins.newline else b"")
+    return b"".join(ins.data + (b"\n" if ins.newline else b"")
                     for ins in ir.instructions if isinstance(ins, IRWrite))
 
 
@@ -139,7 +139,7 @@ def _machine_code(data_length):
     lea_next_ip_offset = len(code) + 4
     displacement = DATA_OFFSET - (CODE_OFFSET + lea_next_ip_offset)
     code += struct.pack("<i", displacement)
-    code += b"\\xba" + struct.pack("<I", data_length)  # mov edx, len
+    code += b"\xba" + struct.pack("<I", data_length)  # mov edx, len
     code += bytes.fromhex("0f05")               # syscall
     code += bytes.fromhex("4839d0")             # cmp rax, rdx
     code += bytes.fromhex("7509")               # jne short failure exit
@@ -159,7 +159,7 @@ def build_elf64(data):
     if len(code) > 0x1000:
         raise ValueError("native code exceeds the first backend page")
     code_segment_size = CODE_OFFSET + len(code)
-    ident = b"\\x7fELF" + bytes((2, 1, 1, 0, 0)) + bytes(7)
+    ident = b"\x7fELF" + bytes((2, 1, 1, 0, 0)) + bytes(7)
     program_headers = [
         struct.pack("<IIQQQQQQ", 1, 5, 0, ELF_BASE, ELF_BASE,
                     code_segment_size, code_segment_size, 0x1000),
