@@ -1,0 +1,5 @@
+// EXPECT-ERR: a Result cannot contain another Result
+fn main() -> i32 {
+    let nested: Result<Result<i32, i32>, i32> = Ok(Err(7));
+    return 0;
+}
