@@ -19,9 +19,9 @@ def _error(message, node):
     raise SecError(message, getattr(node, "line", 1), getattr(node, "col", 1))
 
 
-def _check_instruction_budget(instructions, node):
-    if len(instructions) > MAX_NATIVE_INSTRUCTIONS:
-        _error(f"native lowering exceeds the {MAX_NATIVE_INSTRUCTIONS}-instruction limit", node)
+def _check_instruction_budget(instructions, node, limit=MAX_NATIVE_INSTRUCTIONS):
+    if len(instructions) > limit:
+        _error(f"native lowering exceeds the {MAX_NATIVE_INSTRUCTIONS}-instruction program limit", node)
 
 
 def _is_str_type(node):
@@ -397,10 +397,10 @@ def lower_to_ir(items):
             else:
                 value = _lower_i32(arg, bindings, constants, instructions, next_slot, function_signatures)
                 instructions.append(IRPrintI32(value, False))
-            _check_instruction_budget(instructions, arg)
+            _check_instruction_budget(instructions, arg, ctx["instruction_budget"])
         if call.fn.name == "println":
             instructions.append(IRWrite(b"", True))
-            _check_instruction_budget(instructions, call)
+            _check_instruction_budget(instructions, call, ctx["instruction_budget"])
 
     def lower_return(node, bindings):
         if not ctx["allow_return"]:
@@ -502,7 +502,7 @@ def lower_to_ir(items):
                 break
             else:
                 _error("native subset supports bindings, assignments, calls, print, control flow, and return", stmt)
-            _check_instruction_budget(ctx["instructions"], stmt)
+            _check_instruction_budget(ctx["instructions"], stmt, ctx["instruction_budget"])
 
         if not terminated and block.tail is not None:
             if block.tail.k == "If":
@@ -514,22 +514,28 @@ def lower_to_ir(items):
             elif block.tail.k == "Return":
                 lower_return(block.tail, bindings)
                 terminated = True
-        _check_instruction_budget(ctx["instructions"], block)
+        _check_instruction_budget(ctx["instructions"], block, ctx["instruction_budget"])
         return terminated
 
     # Compile the entry function first; its calls may refer forward to any declaration.
     ctx = {"instructions": [], "next_slot": [0], "next_label": [0],
-           "loop_stack": [], "allow_return": False}
+           "loop_stack": [], "allow_return": False,
+           "instruction_budget": MAX_NATIVE_INSTRUCTIONS}
     lower_block(main.body, {})
     main_instructions = tuple(ctx["instructions"] + [IRExit(0)])
     _check_instruction_budget(main_instructions, main)
+    total_instructions = len(main_instructions)
 
     lowered_functions = []
     for name, function in raw_functions.items():
         if name == "main":
             continue
+        remaining_budget = MAX_NATIVE_INSTRUCTIONS - total_instructions
+        if remaining_budget <= 0:
+            _error(f"native lowering exceeds the {MAX_NATIVE_INSTRUCTIONS}-instruction program limit", function)
         ctx = {"instructions": [], "next_slot": [0], "next_label": [0],
-               "loop_stack": [], "allow_return": True}
+               "loop_stack": [], "allow_return": True,
+               "instruction_budget": remaining_budget}
         bindings = {}
         for index, parameter in enumerate(function.params):
             slot = ctx["next_slot"][0]
@@ -539,8 +545,9 @@ def lower_to_ir(items):
         terminated = lower_block(function.body, bindings)
         if not terminated:
             _error(f"native function `{name}` can reach its end without returning i32", function)
-        _check_instruction_budget(ctx["instructions"], function)
+        _check_instruction_budget(ctx["instructions"], function, remaining_budget)
         lowered_functions.append(IRFunction(name, len(function.params), tuple(ctx["instructions"])))
+        total_instructions += len(ctx["instructions"])
 
     return IRProgram(main_instructions, tuple(lowered_functions))
 
