@@ -1858,15 +1858,34 @@ class Compiler:
                 self.err("this parameter requires `&mut`; write `&mut x`", a)
             if a.mut and not pl.mut:
                 self.err("cannot borrow as mutable: the binding is not declared `mut` (or is behind a shared reference)", a)
+            if a.mut and pl.ty.k == "str" and not self.unsafe_depth:
+                # A str value is a read-only view (normally a literal), not
+                # owned writable storage. A mutable binding does not make
+                # the literal's bytes writable.
+                # Reborrowing an existing &mut str is safe because it can
+                # only originate from a mutable borrow of an owned String.
+                source_is_mut_str_ref = False
+                if tgt.k == "Var":
+                    source = self.lookup(tgt.name)
+                    source_is_mut_str_ref = (
+                        source is not None and source.ty.k == "ref"
+                        and source.ty.name == "mut" and source.ty.args[0].k == "str"
+                    )
+                if not source_is_mut_str_ref:
+                    self.err("cannot mutably borrow immutable string data; borrow an owned String instead", a)
             if pl.root:
                 ents.append((pl.root, "mut" if a.mut else "shared"))
             return self.ref_coerce(pl, pt, a)
         if a.k == "Str":
+            if wantmut and not self.unsafe_depth:
+                self.err("cannot mutably borrow an immutable string literal", a)
             c, t = self.expr(a, None)
             return self.ref_coerce(Place(c, STR, False), pt, a)
         if a.k == "Var":
             v = self.lookup(a.name)
             if v is None and a.name in self.consts and self.consts[a.name][0].k == "str":
+                if wantmut and not self.unsafe_depth:
+                    self.err("cannot mutably borrow an immutable string constant", a)
                 c, t = self.expr(a, None)
                 return self.ref_coerce(Place(c, STR, False), pt, a)
             if v is not None and v.ty.k == "ref":
@@ -1877,6 +1896,8 @@ class Compiler:
                 ents.append((v.name, "mut" if wantmut else "shared"))
                 return self.ref_coerce(self.pointee(v, a), pt, a)
             if v is not None and v.ty.k == "str" and inner.k == "str":
+                if wantmut and not self.unsafe_depth:
+                    self.err("cannot pass an immutable str value as a mutable reference; borrow an owned String instead", a)
                 return v.c
         self.err(f"expected a reference of type `{tstr(pt)}`: pass `&x` or `&mut x`", a)
 

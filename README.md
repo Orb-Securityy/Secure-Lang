@@ -1,4 +1,4 @@
-# Secure — a security-first systems language (v0.1.20, bootstrap)
+# Secure — a security-first systems language (v0.1.21, bootstrap)
 
 **Orb Security · Orb Corporation · Proprietary & confidential**
 
@@ -8,7 +8,7 @@ null dereference, uninitialized reads, silent numeric conversion, ignored errors
 
 This repository is the **bootstrap toolchain**: `securec`, a compiler written in Python (a memory-safe host)
 that type-checks, ownership-checks and lowers Secure to hardened GNU C11, then to a native PIE binary via `gcc`.
-It is a working, tested v0.1.20 atomic build output safety update — not a finished production system. Read `docs/SECURITY.md` for exactly what is
+It is a working, tested v0.1.21 safety-hardening update — not a finished production system. Read `docs/SECURITY.md` for exactly what is
 and is not guaranteed.
 
 ```
@@ -18,7 +18,10 @@ bin/securec check prog.sec          # type/ownership/borrow check only
 bin/securec emit-c prog.sec         # inspect the generated C (deterministic)
 bin/securec audit prog.sec          # JSON: source SHA-256, every unsafe/extern site
   flags: --forbid-unsafe  --sanitize (ASan/UBSan/LSan)  -O0..-O3  --strict-cc
-python3 tests/run_tests.py          # full conformance suite
+python3 tests/run_tests.py          # conformance: normal + ASan/UBSan/LSan
+python3 -m unittest discover -s tests -p 'test_*.py'  # compiler/driver properties
+python3 tests/run_analyzer.py       # GCC -fanalyzer on generated C
+python tests/fuzz_frontend.py -atheris_runs=30000  # optional Atheris campaign
 python3 bench/run_bench.py          # performance vs unchecked C
 ```
 
@@ -44,8 +47,9 @@ impl Account {
 | `bench/` | benchmark programs in Secure and C |
 | `examples/` | input validation, parallel sum, ledger |
 | `docs/SPEC.md` `docs/SECURITY.md` `docs/AUDIT.md` | language reference, security model, audit workflow |
+| `docs/FUZZING.md` `docs/STATIC_ANALYSIS.md` | bounded frontend fuzzing and generated-C analyzer workflow |
 
-## Status (v0.1)
+## Status (v0.1.21)
 | Area | Status |
 |---|---|
 | Native compilation, hardened flags | Implemented (via GCC) |

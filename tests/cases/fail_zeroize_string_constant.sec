@@ -1,0 +1,5 @@
+// EXPECT-ERR: cannot mutably borrow an immutable string constant
+const SECRET: str = "secret";
+fn main() {
+    zeroize(SECRET);
+}

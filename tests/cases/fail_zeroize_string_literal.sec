@@ -1,0 +1,4 @@
+// EXPECT-ERR: cannot mutably borrow an immutable string literal
+fn main() {
+    zeroize("secret");
+}

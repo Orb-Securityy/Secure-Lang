@@ -1,0 +1,8 @@
+// EXPECT-ERR: cannot mutably borrow immutable string data
+fn wipe(value: &mut str) {
+    zeroize(value.as_mut_slice());
+}
+fn main() {
+    let mut value = "secret";
+    wipe(&mut value);
+}

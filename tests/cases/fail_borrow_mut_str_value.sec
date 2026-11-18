@@ -1,0 +1,8 @@
+// EXPECT-ERR: cannot pass an immutable str value
+fn wipe(value: &mut str) {
+    zeroize(value.as_mut_slice());
+}
+fn main() {
+    let value = "secret";
+    wipe(value);
+}
