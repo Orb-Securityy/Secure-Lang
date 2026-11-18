@@ -348,7 +348,7 @@ class NativeX8664Tests(unittest.TestCase):
             self.assertEqual(main(['native-build', source, '-o', output]), 0)
             result = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'Sum: 15\\n')
+        self.assertEqual(result.stdout, b'Sum: 15\n')
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_for_inclusive_i32_max_does_not_overflow(self):
