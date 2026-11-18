@@ -67,6 +67,21 @@ class NativeX8664Tests(unittest.TestCase):
             result = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'Built by Secure\n')
+    def test_native_build_rejects_c_compiler_flags_and_program_args(self):
+        with self.assertRaises(SystemExit):
+            main(['native-build', 'unused.sec', '--sanitize'])
+        with self.assertRaises(SystemExit):
+            main(['native-build', 'unused.sec', 'runtime-argument'])
+
+    def test_native_build_never_overwrites_its_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, 'program.sec')
+            original = b'fn main() {}'
+            with open(source, 'wb') as stream:
+                stream.write(original)
+            self.assertEqual(main(['native-build', source, '-o', source]), 2)
+            with open(source, 'rb') as stream:
+                self.assertEqual(stream.read(), original)
     def test_rejects_constructs_outside_the_native_subset(self):
         unsupported = [
             'fn main() { let x: i32 = 1; }',
