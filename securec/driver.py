@@ -49,32 +49,37 @@ def report(e, path, src):
 
 def compile_source(path, forbid_unsafe=False):
     try:
-        with open(path, encoding="utf-8") as source_file:
-            src = source_file.read()
+        # Keep the exact bytes for audit provenance. Decode separately and
+        # apply Python text-mode universal-newline semantics for the compiler.
+        with open(path, "rb") as source_file:
+            source_bytes = source_file.read()
+        decoded = source_bytes.decode("utf-8")
+        src = decoded.replace("\r\n", "\n").replace("\r", "\n")
     except UnicodeDecodeError as exc:
         print(
             f"error: {terminal_safe(os.path.basename(path))} is not valid UTF-8 "
             f"(invalid byte at offset {exc.start})",
             file=sys.stderr,
         )
-        return None, None, None
+        return None, None, None, None
     except OSError as exc:
         print(f"error: cannot read source file {terminal_safe(os.path.basename(path))}: {terminal_safe(exc.strerror or exc)}",
               file=sys.stderr)
-        return None, None, None
+        return None, None, None, None
+    source_sha256 = hashlib.sha256(source_bytes).hexdigest()
     comp = Compiler(src, path, forbid_unsafe)
     try:
         csrc = comp.compile()
     except SecError as e:
         report(e, path, src)
-        return None, None, src
+        return None, None, src, source_sha256
     except RecursionError:
         print(
             f"error: source nesting exceeds the compiler's supported depth in {terminal_safe(os.path.basename(path))}",
             file=sys.stderr,
         )
-        return None, None, src
-    return csrc, comp, src
+        return None, None, src, source_sha256
+    return csrc, comp, src, source_sha256
 
 
 def cc_build(csrc, out, opt="-O2", strict=False, sanitize=False):
@@ -119,9 +124,9 @@ def same_file_path(source, output):
     return os.path.normcase(source_path) == os.path.normcase(output_path)
 
 
-def audit_report(path, src, comp):
+def audit_report(path, source_sha256, comp):
     return {"tool": "securec " + VERSION, "source": os.path.basename(path),
-            "sha256": hashlib.sha256(src.encode()).hexdigest(),
+            "sha256": source_sha256,
             "unsafe_blocks": comp.audit["unsafe_blocks"], "unsafe_fns": comp.audit["unsafe_fns"],
             "extern_fns": comp.audit["extern_fns"],
             "safe_subset": not (comp.audit["unsafe_blocks"] or comp.audit["unsafe_fns"] or comp.audit["extern_fns"])}
@@ -138,7 +143,7 @@ def main(argv=None):
     ap.add_argument("--sanitize", action="store_true", help="build with ASan/UBSan/LeakSanitizer (testing)")
     ap.add_argument("args", nargs="*")
     a = ap.parse_args(argv)
-    csrc, comp, src = compile_source(a.file, a.forbid_unsafe)
+    csrc, comp, src, source_sha256 = compile_source(a.file, a.forbid_unsafe)
     if csrc is None:
         return 1
     if a.cmd == "check":
@@ -147,7 +152,7 @@ def main(argv=None):
         sys.stdout.write(csrc)
         return 0
     if a.cmd == "audit":
-        print(json.dumps(audit_report(a.file, src, comp), indent=2))
+        print(json.dumps(audit_report(a.file, source_sha256, comp), indent=2))
         return 0
     if a.cmd == "run":
         try:
