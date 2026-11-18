@@ -190,6 +190,44 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(result.stdout, b'Answer: 42\n')
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_i32_arithmetic_differential_against_reference_model(self):
+        pairs = [
+            (0, 1), (1, 1), (-1, 1), (1, -1), (-1, -1),
+            (7, 2), (-7, 2), (7, -2), (-7, -2),
+            (46340, 46340), (-46340, 46340),
+            (46340, -46340), (-46340, -46340),
+            (12345, -6789), (-20000, 3), (30000, -7),
+        ]
+        def trunc_div(a, b):
+            quotient = abs(a) // abs(b)
+            return quotient if (a < 0) == (b < 0) else -quotient
+
+        expected = []
+        calls = []
+        for a, b in pairs:
+            quotient = trunc_div(a, b)
+            remainder = a - quotient * b
+            expected.append(f"{a + b},{a - b},{a * b},{quotient},{remainder}\\n")
+            calls.append(f"    evaluate({a}, {b});")
+        source = (
+            'fn evaluate(a: i32, b: i32) -> i32 {\\n'
+            '    println(a + b, ",", a - b, ",", a * b, ",", a / b, ",", a % b);\\n'
+            '    return 0;\\n'
+            '}\\n'
+            'fn main() {\\n' + "\\n".join(calls) + '\\n}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'arithmetic-differential')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.decode('ascii'), ''.join(expected))
+
     def test_native_runtime_i32_arithmetic_executes_at_runtime(self):
         source = (
             'fn main() {\n'
