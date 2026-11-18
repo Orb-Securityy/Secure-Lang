@@ -7,6 +7,7 @@
 - Use unsigned 128-bit intermediates for unsigned checked left shifts and wrapping multiplication, avoiding overflow in the safety checks themselves.
 - Add sanitizer-backed regressions for argument ordering, container reallocation during borrow preparation, empty slices, maximum-width unsigned shifts, and small-width wrapping multiplication.
 - Expand evidence with coverage-guided frontend fuzzing, deterministic differential arithmetic tests, ownership/borrow property tests, and GCC -fanalyzer.
+
 ## 0.1.20 — atomic build output installation
 
 - Compile native executables in a temporary directory on the destination filesystem and install them with atomic replacement.
