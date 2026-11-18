@@ -8,7 +8,7 @@ null dereference, uninitialized reads, silent numeric conversion, ignored errors
 
 This repository is the **bootstrap toolchain**: `securec`, a compiler written in Python (a memory-safe host)
 that type-checks, ownership-checks and lowers Secure to hardened GNU C11, then to a native PIE binary via `gcc`.
-It is a working, tested v0.1.21 atomic build output safety update — not a finished production system. Read `docs/SECURITY.md` for exactly what is
+It is a working, tested v0.1.21 safety-hardening update — not a finished production system. Read `docs/SECURITY.md` for exactly what is
 and is not guaranteed.
 
 ```
