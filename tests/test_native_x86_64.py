@@ -7,8 +7,9 @@ import tempfile
 import unittest
 
 from securec.lexer import SecError
+from securec.parser import parse
 from securec.driver import main
-from securec.native_x86_64 import compile_native_subset
+from securec.native_x86_64 import (IRExit, IRProgram, IRWrite, compile_native_subset,\n                                  lower_to_ir, verify_ir)
 
 
 class NativeX8664Tests(unittest.TestCase):
@@ -67,6 +68,61 @@ class NativeX8664Tests(unittest.TestCase):
             result = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'Built by Secure\n')
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_static_str_bindings_and_constants_execute(self):
+        source = (
+            'const GREETING: str = "Hello";\\n'
+            'fn main() {\\n'
+            '    let audience: str = "Secure";\\n'
+            '    let prefix = GREETING;\\n'
+            '    print(prefix, ", ");\\n'
+            '    println(audience, "!");\\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'static-strings')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'Hello, Secure!\\n')
+
+    def test_native_subset_rejects_mutable_and_non_string_bindings(self):
+        unsupported = [
+            'fn main() { let mut name: str = "Secure"; println(name); }',
+            'fn main() { let number: i32 = 7; println("ok"); }',
+            'fn main() { let name: str = missing; println(name); }',
+            'const VALUE: i32 = 7; fn main() { println("ok"); }',
+            'const print: str = "shadow"; fn main() { println("ok"); }',
+            'fn main() { let name = "Secure"; name = "changed"; println(name); }',
+        ]
+        for source in unsupported:
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
+
+    def test_native_ir_verifier_rejects_malformed_ir(self):
+        valid = IRProgram((IRWrite(b"ok", True), IRExit(0)))
+        self.assertEqual(verify_ir(valid), 3)
+        invalid = [
+            IRProgram(()),
+            IRProgram((IRExit(0), IRWrite(b"late", False))),
+            IRProgram((IRWrite("not-bytes", False), IRExit(0))),
+            IRProgram((IRWrite(b"ok", 1), IRExit(0))),
+            IRProgram((IRWrite(b"ok", False), IRExit(1))),
+        ]
+        for ir in invalid:
+            with self.subTest(ir=ir):
+                with self.assertRaises(ValueError):
+                    verify_ir(ir)
+
+    def test_native_ir_is_immutable_and_typed(self):
+        ir = lower_to_ir(parse('fn main() { println("IR"); }'))
+        self.assertIsInstance(ir, IRProgram)
+        self.assertEqual(ir.instructions, (IRWrite(b"IR", True), IRExit(0)))
     def test_native_build_rejects_c_compiler_flags_and_program_args(self):
         with self.assertRaises(SystemExit):
             main(['native-build', 'unused.sec', '--sanitize'])
