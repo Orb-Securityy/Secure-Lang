@@ -7,7 +7,7 @@ import struct
 
 from .ir import (IRArrayCreate, IRArrayLoadI32, IRArrayStoreI32, IRBinaryI32, IRCallI32,
                  IRCompareBranch, IRConstI32, IRExit, IRFunction, IRJump, IRLabel,
-                 IRLocalI32, IRParamI32, IRPrintI32, IRReturnI32, IRStoreI32,
+                 IRLocalI32, IRParamI32, IRPrintI32, IRReadByte, IRReturnI32, IRStoreI32,
                  IRUnaryI32, IRValue, IRWrite, MAX_OUTPUT, MAX_NATIVE_ARGS,
                  MAX_NATIVE_ARRAY_BYTES, verify_ir)
 
@@ -260,7 +260,7 @@ def _emit_program_code(ir):
         nonlocal needs_write_helper
         slot_types = (
             IRConstI32, IRParamI32, IRLocalI32, IRUnaryI32,
-            IRBinaryI32, IRCallI32, IRArrayLoadI32,
+            IRBinaryI32, IRCallI32, IRArrayLoadI32, IRReadByte,
         )
         slot_count = sum(type(ins) in slot_types for ins in instructions)
         # The first 32 bytes are reserved for the integer formatter; scalar
@@ -334,6 +334,38 @@ def _emit_program_code(ir):
                 _emit_array_bounds_check(code, instruction.index.slot, length, trap_fixups)
                 _emit_load_eax(code, instruction.value.slot)
                 _emit_array_store(code, base_disp, element_size, trap_fixups)
+            elif type(instruction) is IRReadByte:
+                # Linux read(0, rsp+31, 1). The formatter's 32-byte scratch
+                # area is reserved in every frame, so this byte cannot alias
+                # any verified scalar or fixed-array slot.
+                retry = len(code)
+                code.extend(bytes.fromhex("31c031ff488d74241fba010000000f05"))
+                retry_fixups = []
+                code.extend(bytes.fromhex("4883f8fc"))  # cmp rax, -EINTR
+                _emit_jcc32(code, 0x84, retry_fixups)
+                byte_fixups = []
+                code.extend(bytes.fromhex("4883f801"))  # cmp rax, 1
+                _emit_jcc32(code, 0x84, byte_fixups)
+                eof_fixups = []
+                code.extend(bytes.fromhex("4885c0"))  # test rax, rax
+                _emit_jcc32(code, 0x84, eof_fixups)
+                _emit_jmp32(code, trap_fixups)  # all other read errors fail closed
+                byte_label = len(code)
+                code.extend(bytes.fromhex("0fb644241f"))  # movzx eax, byte [rsp+31]
+                end_fixups = []
+                _emit_jmp32(code, end_fixups)
+                eof_label = len(code)
+                code.extend(bytes.fromhex("b8ffffffff"))  # EOF sentinel = -1
+                end_label = len(code)
+                _emit_store_eax(code, instruction.dest)
+                for position in retry_fixups:
+                    _patch_rel32(code, position, retry)
+                for position in byte_fixups:
+                    _patch_rel32(code, position, byte_label)
+                for position in eof_fixups:
+                    _patch_rel32(code, position, eof_label)
+                for position in end_fixups:
+                    _patch_rel32(code, position, end_label)
             elif type(instruction) is IRStoreI32:
                 _emit_load_eax(code, instruction.value.slot)
                 _emit_store_eax(code, instruction.dest)
