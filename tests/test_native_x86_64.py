@@ -216,7 +216,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'-2147483648\\n0')
+        self.assertEqual(result.stdout, b'-2147483648\n0')
     def test_native_ir_rejects_output_larger_than_limit(self):
         ir = IRProgram((IRWrite(b'x' * (MAX_OUTPUT + 1), False), IRExit(0)))
         with self.assertRaises(ValueError):
