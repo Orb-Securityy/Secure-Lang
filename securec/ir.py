@@ -46,6 +46,25 @@ class IRPrintI32:
 
 
 @dataclass(frozen=True)
+class IRLabel:
+    label: int
+
+
+@dataclass(frozen=True)
+class IRJump:
+    target: int
+
+
+@dataclass(frozen=True)
+class IRBranchI32:
+    op: str
+    left: IRValue
+    right: IRValue
+    if_true: int
+    if_false: int
+
+
+@dataclass(frozen=True)
 class IRExit:
     status: int
 
@@ -56,7 +75,7 @@ class IRProgram:
 
 
 def verify_ir(ir):
-    """Validate SSA-like local slots, checked i32 operations, and output bounds."""
+    """Validate typed slots, forward control-flow targets, and bounded output."""
     if type(ir) is not IRProgram or type(ir.instructions) is not tuple or not ir.instructions:
         raise ValueError("invalid native IR program")
     if type(ir.instructions[-1]) is not IRExit or type(ir.instructions[-1].status) is not int:
@@ -65,6 +84,8 @@ def verify_ir(ir):
         raise ValueError("native IR currently supports only exit(0)")
 
     defined = set()
+    labels = set()
+    targets = []
     next_slot = 0
     total = 0
     for index, instruction in enumerate(ir.instructions):
@@ -96,6 +117,26 @@ def verify_ir(ir):
                 raise ValueError("native IR uses an undefined i32 slot")
             defined.add(instruction.dest)
             next_slot += 1
+        elif type(instruction) is IRBranchI32:
+            if instruction.op not in ("==", "!=", "<", "<=", ">", ">="):
+                raise ValueError("unsupported native i32 branch comparison")
+            if type(instruction.left) is not IRValue or type(instruction.right) is not IRValue:
+                raise ValueError("native branch operands must be i32 slot references")
+            if (type(instruction.left.slot) is not int or instruction.left.slot not in defined
+                    or type(instruction.right.slot) is not int or instruction.right.slot not in defined):
+                raise ValueError("native branch uses an undefined i32 slot")
+            for target in (instruction.if_true, instruction.if_false):
+                if type(target) is not int or target < 0:
+                    raise ValueError("invalid native branch target")
+                targets.append(target)
+        elif type(instruction) is IRLabel:
+            if type(instruction.label) is not int or instruction.label < 0 or instruction.label in labels:
+                raise ValueError("duplicate or invalid native IR label")
+            labels.add(instruction.label)
+        elif type(instruction) is IRJump:
+            if type(instruction.target) is not int or instruction.target < 0:
+                raise ValueError("invalid native jump target")
+            targets.append(instruction.target)
         elif type(instruction) is IRWrite:
             if index == len(ir.instructions) - 1 or type(instruction.data) is not bytes:
                 raise ValueError("invalid native write instruction")
@@ -121,4 +162,6 @@ def verify_ir(ir):
             raise ValueError("unknown native IR instruction")
         if total > MAX_OUTPUT:
             raise ValueError("native output exceeds the 1 MiB limit")
+    if any(target not in labels for target in targets):
+        raise ValueError("native IR branch references an undefined label")
     return total
