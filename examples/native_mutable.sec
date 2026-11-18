@@ -1,0 +1,11 @@
+// Native subset: mutable i32 locals, checked arithmetic, and conditional branches.
+fn main() {
+    let mut total: i32 = 2;
+    total *= 3;
+    total += 4;
+    if total == 10 {
+        println("total = ", total);
+    } else {
+        println("unexpected total");
+    }
+}

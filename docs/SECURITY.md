@@ -18,6 +18,8 @@ file `securec/secure_rt.h`. Compile-time assertions enforce 8-bit bytes, exact i
 proof of the checker; the argument is by construction (§3) plus tests. Removing GCC from the TCB (own backend)
 and mechanizing the ownership/borrow rules are roadmap items.
 
+**Separate experimental native path:** `securec native-build` uses a narrow Python parser/lowerer and the repository-owned x86-64 ELF backend. Its subset checker and IR verifier are not the same as the full `securec/compiler.py` type/ownership checker; none of the full language's security guarantees should be inferred for this subset. The native path avoids GCC/C/libc in the generated program's build/runtime chain, but its frontend is still Python and it is not self-hosted or production-ready.
+
 ## 3. Guarantees, mechanisms, evidence
 | Property | Mechanism | Evidence (tests) |
 |---|---|---|
@@ -74,4 +76,4 @@ and mechanizing the ownership/borrow rules are roadmap items.
 4. Std: files, sockets, TLS/crypto bindings behind capability-typed handles; `Secret<T>` with zeroize-on-drop.
 5. Package manager: lockfiles with content hashes, signed registry, reproducible builds, `--forbid-unsafe` per dependency.
 6. Mutex/channel/atomic types with `Send`/`Sync`-style checking; scoped threads.
-7. Native backend (LLVM or own) and self-hosting to shrink the TCB.
+7. Implement the repository-owned x86-64 native backend and self-hosting compiler; remove Python, C, GCC/LLVM, assembler, linker, and external language runtimes from the normal release build path.

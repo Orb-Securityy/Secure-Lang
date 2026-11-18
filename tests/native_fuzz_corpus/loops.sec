@@ -1,0 +1,8 @@
+!fn main() {
+    let mut total: i32 = 0;
+    for i in 1..=8 {
+        if i == 4 { continue; }
+        total += i;
+    }
+    println(total);
+}

@@ -1,4 +1,4 @@
-"""Command line driver: securec {build,run,check,emit-c,audit} file.sec"""
+"""Command line driver: securec {build,run,check,emit-c,audit,native-build} file.sec"""
 import argparse
 import hashlib
 import json
@@ -8,7 +8,7 @@ import sys
 import tempfile
 from securec import VERSION
 from securec.lexer import SecError
-from securec.compiler import Compiler
+from securec.native_lower import MAX_NATIVE_SOURCE, compile_native_subset
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HARDEN = ["-std=gnu11", "-fstack-protector-strong", "-fstack-clash-protection", "-fcf-protection=full",
@@ -48,6 +48,8 @@ def report(e, path, src):
 
 
 def compile_source(path, forbid_unsafe=False):
+    from securec.compiler import Compiler
+
     try:
         with open(path, encoding="utf-8") as source_file:
             src = source_file.read()
@@ -106,6 +108,60 @@ def cc_build(csrc, out, opt="-O2", strict=False, sanitize=False):
     return True
 
 
+
+def native_build_file(path, output=None):
+    """Build the experimental native subset without invoking C, GCC, or another linker."""
+    try:
+        with open(path, "rb") as source_file:
+            raw = source_file.read(MAX_NATIVE_SOURCE + 1)
+        if len(raw) > MAX_NATIVE_SOURCE:
+            print(f"error: native source exceeds the {MAX_NATIVE_SOURCE}-byte limit", file=sys.stderr)
+            return 1
+        src = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        print(
+            f"error: {terminal_safe(os.path.basename(path))} is not valid UTF-8 "
+            f"(invalid byte at offset {exc.start})",
+            file=sys.stderr,
+        )
+        return 1
+    except OSError as exc:
+        print(f"error: cannot read source file {terminal_safe(os.path.basename(path))}: "
+              f"{terminal_safe(exc.strerror or exc)}", file=sys.stderr)
+        return 1
+
+    try:
+        image = compile_native_subset(src)
+    except SecError as exc:
+        report(exc, path, src)
+        return 1
+    except (ValueError, OverflowError) as exc:
+        print(f"error: native backend rejected program: {terminal_safe(exc)}", file=sys.stderr)
+        return 1
+
+    if output is None:
+        stem, extension = os.path.splitext(path)
+        output = stem if extension else path + ".out"
+    if same_file_path(path, output):
+        print("error: output path must differ from the source file", file=sys.stderr)
+        return 2
+
+    try:
+        output_dir = os.path.dirname(os.path.abspath(output))
+        with tempfile.TemporaryDirectory(prefix=".secure-native-", dir=output_dir) as td:
+            staged = os.path.join(td, "program")
+            with open(staged, "xb") as executable:
+                executable.write(image)
+                executable.flush()
+                os.fsync(executable.fileno())
+            os.chmod(staged, 0o755)
+            os.replace(staged, output)
+    except OSError as exc:
+        print(f"error: could not safely install native output: "
+              f"{terminal_safe(exc.strerror or exc)}", file=sys.stderr)
+        return 2
+    return 0
+
 def same_file_path(source, output):
     """Return true for identical paths, symlinks, or hard links."""
     source_path = os.path.realpath(os.path.abspath(source))
@@ -129,7 +185,7 @@ def audit_report(path, src, comp):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="securec", description="Secure language compiler")
-    ap.add_argument("cmd", choices=["build", "run", "check", "emit-c", "audit"])
+    ap.add_argument("cmd", choices=["build", "run", "check", "emit-c", "audit", "native-build"])
     ap.add_argument("file")
     ap.add_argument("-o", "--output")
     ap.add_argument("-O", dest="opt", default="2", choices=["0", "1", "2", "3"])
@@ -138,6 +194,10 @@ def main(argv=None):
     ap.add_argument("--sanitize", action="store_true", help="build with ASan/UBSan/LeakSanitizer (testing)")
     ap.add_argument("args", nargs="*")
     a = ap.parse_args(argv)
+    if a.cmd == "native-build":
+        if a.args or a.strict_cc or a.sanitize or a.opt != "2":
+            ap.error("native-build does not accept C compiler flags or program arguments")
+        return native_build_file(a.file, a.output)
     csrc, comp, src = compile_source(a.file, a.forbid_unsafe)
     if csrc is None:
         return 1

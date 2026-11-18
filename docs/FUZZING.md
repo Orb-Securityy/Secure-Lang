@@ -18,6 +18,27 @@ Atheris is a test-only dependency. It is not linked into generated programs or
 required to use the Secure compiler. The target is bounded to 16 KiB per input
 and does not invoke GCC or execute generated binaries.
 
+## Native backend fuzzing
+
+The experimental native path has a separate fuzz target because source-to-C
+fuzzing does not exercise native lowering, the IR verifier, or ELF emission.
+
+Run a bounded native campaign:
+
+```sh
+python -m pip install -r requirements-fuzz.txt
+python tests/fuzz_native.py tests/native_fuzz_corpus -atheris_runs=50000
+```
+
+This target explores both arbitrary UTF-8 Secure source and malformed IR
+objects. Successful emissions are checked for ELF64 x86-64 identity, bounded
+program-header ranges, and absence of writable-executable load segments.
+Expected failures are limited to `SecError`, `ValueError`, and
+`OverflowError`; unexpected exceptions escape to Atheris. The test corpus
+contains small valid function, loop, and stack-argument programs so the
+backend receives some valid paths while mutations explore nearby malformed
+states. A clean campaign is not a proof of correctness.
+
 ## What counts as a finding
 
 A normal Secure diagnostic (`SecError`) is expected for arbitrary input.

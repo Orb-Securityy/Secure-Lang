@@ -1,0 +1,8 @@
+// Native range loops with a private mutable counter and an immutable loop binding.
+fn main() {
+    let mut total: i32 = 0;
+    for value in 1..=5 {
+        total += value;
+    }
+    println("Sum: ", total);
+}
