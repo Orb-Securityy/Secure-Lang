@@ -223,6 +223,10 @@ class NativeX8664Tests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             main(['native-build', 'unused.sec', 'runtime-argument'])
 
+    def test_native_lowering_normalizes_deep_expression_recursion(self):
+        nested = 'fn main() { println(' + ('(' * 1500) + '1' + (')' * 1500) + '); }'
+        with self.assertRaises(SecError):
+            compile_native_subset(nested)
     def test_native_build_rejects_oversized_source_before_parsing(self):
         with tempfile.TemporaryDirectory() as directory:
             source = os.path.join(directory, 'oversized.sec')
