@@ -1,5 +1,5 @@
 """Python bootstrap frontend/lowering for the restricted native Secure subset."""
-from .ir import (IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit, IRFunction, IRJump,
+from .ir import (IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRCopyI32, IRExit, IRFunction, IRJump,
                  IRLabel, IRLocalI32, IRParamI32, IRPrintI32, IRProgram, IRReadByte, IRReturnI32,
                  IRStoreI32, IRUnaryI32, IRValue, IRWrite, MAX_NATIVE_ARGS,
                  MAX_NATIVE_CONSTANTS, MAX_NATIVE_FUNCTIONS, MAX_NATIVE_INSTRUCTIONS)
@@ -451,6 +451,15 @@ def lower_to_ir(items):
                         ctx["instructions"].append(IRLocalI32(dest, value))
                         bindings[stmt.name] = ("i32", IRValue(dest), True)
                     else:
+                        # Immutable bindings are snapshots, not aliases of
+                        # mutable locals or parameters.
+                        source_binding = bindings.get(stmt.init.name) if stmt.init.k == "Var" else None
+                        if (source_binding is not None and len(source_binding) >= 3
+                                and source_binding[2] is True):
+                            dest = ctx["next_slot"][0]
+                            ctx["next_slot"][0] += 1
+                            ctx["instructions"].append(IRCopyI32(dest, value))
+                            value = IRValue(dest)
                         bindings[stmt.name] = ("i32", value)
             elif stmt.k == "ExprStmt" and stmt.e.k == "Call":
                 if stmt.e.fn.k == "Var" and stmt.e.fn.name in ("print", "println"):
