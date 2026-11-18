@@ -13,7 +13,7 @@ from securec.native_x86_64 import compile_native_subset
 class NativeX8664Tests(unittest.TestCase):
     def test_minimal_elf_header_and_segment_permissions(self):
         image = compile_native_subset('fn main() { println("Hello, World!"); }')
-        self.assertEqual(image[:4], b'\\x7fELF')
+        self.assertEqual(image[:4], b'\x7fELF')
         self.assertEqual(image[4], 2)  # ELFCLASS64
         self.assertEqual(image[5], 1)  # little endian
         e_type, e_machine = struct.unpack_from('<HH', image, 16)
@@ -45,7 +45,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'Hello, World!\\nNative ELF\\n')
+        self.assertEqual(result.stdout, b'Hello, World!\nNative ELF\n')
 
     def test_rejects_constructs_outside_the_native_subset(self):
         unsupported = [
@@ -63,7 +63,7 @@ class NativeX8664Tests(unittest.TestCase):
 
     def test_empty_main_emits_a_valid_exit_program(self):
         image = compile_native_subset('fn main() {}')
-        self.assertEqual(image[:4], b'\\x7fELF')
+        self.assertEqual(image[:4], b'\x7fELF')
         self.assertGreater(len(image), 0x1000)
 
 
