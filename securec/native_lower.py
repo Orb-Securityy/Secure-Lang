@@ -2,7 +2,7 @@
 from .ir import (IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit, IRFunction, IRJump,
                  IRLabel, IRLocalI32, IRParamI32, IRPrintI32, IRProgram, IRReturnI32,
                  IRStoreI32, IRUnaryI32, IRValue, IRWrite, MAX_NATIVE_ARGS,
-                 MAX_NATIVE_FUNCTIONS)
+                 MAX_NATIVE_CONSTANTS, MAX_NATIVE_FUNCTIONS, MAX_NATIVE_INSTRUCTIONS)
 from .lexer import SecError
 from .native_x86_64 import emit_native
 from .parser import parse
@@ -17,6 +17,11 @@ COMPARISONS = ("==", "!=", "<", "<=", ">", ">=")
 
 def _error(message, node):
     raise SecError(message, getattr(node, "line", 1), getattr(node, "col", 1))
+
+
+def _check_instruction_budget(instructions, node):
+    if len(instructions) > MAX_NATIVE_INSTRUCTIONS:
+        _error(f"native lowering exceeds the {MAX_NATIVE_INSTRUCTIONS}-instruction limit", node)
 
 
 def _is_str_type(node):
@@ -196,14 +201,21 @@ def _lower_i32(expr, bindings, constants, instructions, next_slot, function_sign
 
 def lower_to_ir(items):
     """Type-check the native subset and lower main plus real i32 functions to verified IR."""
+    if len(items) > MAX_NATIVE_FUNCTIONS + MAX_NATIVE_CONSTANTS + 1:
+        _error("native program exceeds the top-level declaration limit", items[-1])
     raw_functions = {}
     constants = {}
+    constant_count = 0
     for item in items:
         if item.k == "Fn":
             if item.name in raw_functions or item.name in ("print", "println"):
                 _error(f"duplicate or reserved native function `{item.name}`", item)
             raw_functions[item.name] = item
-        elif item.k != "Const":
+        elif item.k == "Const":
+            constant_count += 1
+            if constant_count > MAX_NATIVE_CONSTANTS:
+                _error(f"native subset supports at most {MAX_NATIVE_CONSTANTS} constants", item)
+        else:
             _error("native subset accepts only constants and function declarations", item)
 
     user_function_count = len(raw_functions) - int("main" in raw_functions)
@@ -385,8 +397,10 @@ def lower_to_ir(items):
             else:
                 value = _lower_i32(arg, bindings, constants, instructions, next_slot, function_signatures)
                 instructions.append(IRPrintI32(value, False))
+            _check_instruction_budget(instructions, arg)
         if call.fn.name == "println":
             instructions.append(IRWrite(b"", True))
+            _check_instruction_budget(instructions, call)
 
     def lower_return(node, bindings):
         if not ctx["allow_return"]:
@@ -488,6 +502,7 @@ def lower_to_ir(items):
                 break
             else:
                 _error("native subset supports bindings, assignments, calls, print, control flow, and return", stmt)
+            _check_instruction_budget(ctx["instructions"], stmt)
 
         if not terminated and block.tail is not None:
             if block.tail.k == "If":
@@ -499,6 +514,7 @@ def lower_to_ir(items):
             elif block.tail.k == "Return":
                 lower_return(block.tail, bindings)
                 terminated = True
+        _check_instruction_budget(ctx["instructions"], block)
         return terminated
 
     # Compile the entry function first; its calls may refer forward to any declaration.
@@ -506,6 +522,7 @@ def lower_to_ir(items):
            "loop_stack": [], "allow_return": False}
     lower_block(main.body, {})
     main_instructions = tuple(ctx["instructions"] + [IRExit(0)])
+    _check_instruction_budget(main_instructions, main)
 
     lowered_functions = []
     for name, function in raw_functions.items():
@@ -522,6 +539,7 @@ def lower_to_ir(items):
         terminated = lower_block(function.body, bindings)
         if not terminated:
             _error(f"native function `{name}` can reach its end without returning i32", function)
+        _check_instruction_budget(ctx["instructions"], function)
         lowered_functions.append(IRFunction(name, len(function.params), tuple(ctx["instructions"])))
 
     return IRProgram(main_instructions, tuple(lowered_functions))
