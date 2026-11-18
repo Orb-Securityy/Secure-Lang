@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — defined signed wrapping semantics
+
+- Convert wrapping arithmetic results and `as wrapping` casts through an explicit width-limited helper, avoiding out-of-range unsigned-to-signed C conversions.
+- Add boundary regressions for signed 8/16/32/64-bit wrapping arithmetic and signed/unsigned wrapping casts.
+
 ## Unreleased — immutable str mutation regression coverage
 
 - Add compile-fail cases for indexed writes through mutable `str` bindings, mutable struct fields, and mutable borrows of `str` fields.
