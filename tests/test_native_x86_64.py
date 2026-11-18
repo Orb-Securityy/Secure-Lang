@@ -35,7 +35,7 @@ class NativeX8664Tests(unittest.TestCase):
         code, rodata = loads
         self.assertEqual(code[1], 5)    # PF_R | PF_X
         self.assertEqual(rodata[1], 4)  # PF_R only; literals are not executable
-        self.assertEqual(code[5], 0x1000 + 50)
+        self.assertEqual(code[5], 0x1000 + 64)
         self.assertEqual(rodata[2], 0x2000)
         self.assertGreater(rodata[5], 0)
         self.assertEqual(stack[1], 6)   # PF_R | PF_W, never executable
@@ -56,6 +56,27 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'Hello, World!\nNative ELF\n')
 
+    def test_native_machine_code_has_eintr_and_partial_write_branches(self):
+        image = compile_native_subset('fn main() { println("retry"); }')
+        code = image[0x1000:0x1000 + 64]
+        self.assertEqual(code[24:28], bytes.fromhex('4883f8fc'))
+        self.assertEqual(code[28:30], bytes.fromhex('74f8'))
+        self.assertEqual(code[33:35], bytes.fromhex('7e11'))
+        self.assertEqual(code[41:43], bytes.fromhex('75eb'))
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_large_output_is_written_completely(self):
+        payload = 'Z' * 100_000
+        image = compile_native_subset('fn main() { print("' + payload + '"); }')
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'large-output')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, payload.encode('ascii'))
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_build_cli_produces_executable_without_cc_build(self):
