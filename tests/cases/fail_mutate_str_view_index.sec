@@ -1,0 +1,5 @@
+// EXPECT-ERR: cannot assign through an immutable binding
+fn main() {
+    let mut view = "immutable";
+    view[0] = 0u8;
+}
