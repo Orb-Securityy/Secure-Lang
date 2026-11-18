@@ -793,6 +793,20 @@ class NativeX8664Tests(unittest.TestCase):
         with self.assertRaises(SecError):
             compile_native_subset(declarations + "fn main() {}")
 
+    def test_native_lowering_enforces_instruction_budget_across_functions(self):
+        functions = []
+        for index in range(50):
+            body = '    println("x");\\n' * 20
+            functions.append(
+                f"fn helper{index}() -> i32 {{\\n"
+                + body
+                + "    return 0;\\n"
+                + "}\\n"
+            )
+        source = "".join(functions) + "fn main() {}"
+        with self.assertRaises(SecError):
+            compile_native_subset(source)
+
     def test_native_lowering_stops_at_instruction_budget(self):
         statements = "    println(\"x\");\n" * (MAX_NATIVE_INSTRUCTIONS // 2 + 1)
         source = "fn main() {\n" + statements + "}"
