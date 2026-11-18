@@ -1890,8 +1890,6 @@ class Compiler:
         for a, (pn, pm, pt) in zip(args, params):
             if pt.k == "ref":
                 a = self.as_ref_form(a)
-                if a.k == "Ref":
-                    self.prep_ref_target(a)
             plan.append((a, pt))
         cs = [None] * len(args)
         for i, (a, pt) in enumerate(plan):           # phase 1: by-value arguments, left to right
@@ -1904,8 +1902,14 @@ class Compiler:
                 if a.k == "Var" and not self.is_copy(pt):
                     ents.append((a.name, "move"))
                 cs[i] = c
-        for i, (a, pt) in enumerate(plan):           # phase 2: form pointers/slices (no user code runs after)
+        # Phase 2 evaluates reference-place expressions (including index and
+        # slice-bound expressions) before forming pointers. They must run only
+        # after every by-value argument has completed, as required by the
+        # language's left-to-right call evaluation rule.
+        for i, (a, pt) in enumerate(plan):
             if pt.k == "ref":
+                if a.k == "Ref":
+                    self.prep_ref_target(a)
                 cs[i] = self.form_ref(a, pt, ents)
         self.check_conflicts(ents, n)
         # Only now is the call guaranteed to execute: if a later argument
