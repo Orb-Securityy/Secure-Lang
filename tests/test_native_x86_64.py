@@ -10,8 +10,8 @@ from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
 from securec.ir import (MAX_OUTPUT, IRBinaryI32, IRCompareBranch, IRConstI32,
-                        IRExit, IRJump, IRLabel, IRPrintI32, IRProgram, IRUnaryI32,
-                        IRValue, IRWrite, verify_ir)
+                        IRExit, IRJump, IRLabel, IRLocalI32, IRPrintI32, IRProgram,
+                        IRStoreI32, IRUnaryI32, IRValue, IRWrite, verify_ir)
 from securec.native_lower import compile_native_subset, lower_to_ir
 from securec.native_x86_64 import emit_native
 
@@ -239,6 +239,57 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'seven\ndone\n')
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_mutable_i32_and_compound_assignments_execute(self):
+        source = (
+            'fn main() {\\n'
+            '    let mut count: i32 = 3;\\n'
+            '    count += 2;\\n'
+            '    count *= 4;\\n'
+            '    count -= 1;\\n'
+            '    count /= 3;\\n'
+            '    count %= 5;\\n'
+            '    let mut branch_value = 5;\\n'
+            '    if branch_value > 3 { branch_value = 20; } else { branch_value = 10; }\\n'
+            '    if branch_value == 20 { println(count, ":", branch_value); } else { println("wrong"); }\\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'mutable-i32')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'1:20\\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_mutable_i32_overflow_traps_with_101(self):
+        source = 'fn main() { let mut n: i32 = 2147483647; n += 1; println(n); }'
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'mutable-overflow')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 101, result.stderr)
+
+    def test_native_rejects_invalid_mutable_i32_operations(self):
+        unsupported = [
+            'fn main() { let mut text: str = "no"; println(text); }',
+            'fn main() { let value: i32 = 1; value = 2; }',
+            'fn main() { missing = 2; }',
+            'fn main() { let mut value: i32 = 1; value += 1.0; }',
+            'fn main() { let mut value: i32 = 1; value &= 1; }',
+        ]
+        for source in unsupported:
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
     def test_native_if_rejects_non_i32_and_non_comparison_conditions(self):
         unsupported = [
             'fn main() { if true { println("bad"); } }',
@@ -292,6 +343,17 @@ class NativeX8664Tests(unittest.TestCase):
                     result = subprocess.run([path], capture_output=True, check=False)
                     self.assertEqual(result.returncode, 101, result.stderr)
 
+    def test_native_ir_verifier_rejects_stores_to_immutable_slots(self):
+        invalid = [
+            IRProgram((IRConstI32(0, 1), IRStoreI32(0, IRValue(0)), IRExit(0))),
+            IRProgram((IRLocalI32(0, IRValue(2)), IRExit(0))),
+            IRProgram((IRConstI32(0, 1), IRLocalI32(1, IRValue(0)),
+                      IRStoreI32(1, IRValue(9)), IRExit(0))),
+        ]
+        for ir in invalid:
+            with self.subTest(ir=ir):
+                with self.assertRaises(ValueError):
+                    verify_ir(ir)
     def test_native_ir_verifier_rejects_invalid_i32_slots(self):
         invalid = [
             IRProgram((IRConstI32(1, 7), IRExit(0))),
