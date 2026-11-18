@@ -8,7 +8,6 @@ import sys
 import tempfile
 from securec import VERSION
 from securec.lexer import SecError
-from securec.compiler import Compiler
 from securec.native_x86_64 import compile_native_subset
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -49,6 +48,8 @@ def report(e, path, src):
 
 
 def compile_source(path, forbid_unsafe=False):
+    from securec.compiler import Compiler
+
     try:
         with open(path, encoding="utf-8") as source_file:
             src = source_file.read()
@@ -191,6 +192,8 @@ def main(argv=None):
     ap.add_argument("args", nargs="*")
     a = ap.parse_args(argv)
     if a.cmd == "native-build":
+        if a.args or a.strict_cc or a.sanitize or a.opt != "2":
+            ap.error("native-build does not accept C compiler flags or program arguments")
         return native_build_file(a.file, a.output)
     csrc, comp, src = compile_source(a.file, a.forbid_unsafe)
     if csrc is None:
