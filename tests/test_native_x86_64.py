@@ -966,6 +966,27 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'12345678\n37\n')
 
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_maximum_32_function_arguments_execute(self):
+        names = [f"p{i}" for i in range(32)]
+        params = ", ".join(f"{name}: i32" for name in names)
+        expression = " + ".join(names)
+        arguments = ", ".join(str(value) for value in range(1, 33))
+        source = (
+            f"fn sum32({params}) -> i32 {{ return {expression}; }}\\n"
+            f"fn main() {{ println(sum32({arguments})); }}"
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'maximum-arguments')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'528\\n')
+
     def test_native_functions_reject_bad_signatures_and_missing_returns(self):
         unsupported = [
             'fn bad(value: str) -> i32 { return 0; } fn main() {}',
