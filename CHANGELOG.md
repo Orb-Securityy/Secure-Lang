@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — signed wrapping and checked enum casts
+
+- Specify and enforce modulo-2^N semantics for wrapping addition, subtraction, multiplication, and integer casts without implementation-defined out-of-range unsigned-to-signed conversions.
+- Route enum-to-integer casts through checked destination-range validation.
+- Verify signed 8/16/32/64-bit boundaries, enum values immediately around u8/i8 limits, all i8/u8 operand pairs, and every signed/unsigned 16-bit source pattern for i8/u8 wrapping conversions.
+
 ## Unreleased — exhaustive wrapping property tests
 
 - Exhaust all signed and unsigned 8-bit operand pairs for wrapping addition, subtraction, and multiplication against independent modular reference models.
