@@ -26,7 +26,7 @@ def _emit_call(code, fixups):
     code.extend(bytes(4))
 
 
-def _emit_i32_formatter(code, value, call_fixups):
+def _emit_i32_formatter(code, value, newline, call_fixups):
     """Emit runtime signed-i32-to-decimal conversion using a 32-byte stack buffer."""
     code.append(0xB8)                         # mov eax, imm32
     code.extend(struct.pack("<i", value))
@@ -42,10 +42,12 @@ def _emit_i32_formatter(code, value, call_fixups):
     _patch_rel8(code, sign_branch, positive)
 
     code.extend(bytes.fromhex("488d74241f")) # lea rsi, [rsp + 31]
+    if newline:
+        code.extend(bytes.fromhex("c6060a"))     # mov byte [rsi], newline
+        code.extend(bytes.fromhex("48ffce"))     # dec rsi
+        code.extend(bytes.fromhex("41ffc1"))     # inc r9d
     code.extend(bytes.fromhex("41b9"))
     code.extend(bytes(4))                     # mov r9d, 0 (output length)
-    if False:
-        pass
     loop_label = len(code)
     code.extend(bytes.fromhex("31d2"))       # xor edx, edx
     code.append(0xB9)
@@ -98,7 +100,7 @@ def _emit_program_code(ir):
             _emit_call(code, call_fixups)
             needs_write_helper = True
         elif type(instruction) is IRPrintI32:
-            _emit_i32_formatter(code, instruction.value, call_fixups)
+            _emit_i32_formatter(code, instruction.value, instruction.newline, call_fixups)
             needs_write_helper = True
         else:
             raise ValueError("unknown native IR instruction")
