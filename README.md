@@ -27,7 +27,7 @@ python3 bench/run_bench.py          # performance vs unchecked C
 ```
 
 Experimental bootstrap command: `bin/securec native-build examples/native_hello.sec -o hello`.
-`native-build` is an experimental bootstrap path: it accepts only a `main` function containing string-literal `println` statements and writes a static x86-64 Linux ELF directly. It does not invoke GCC, an assembler, or a linker. The driver/frontend is still Python, and this restricted path is **not** the normal compiler or a self-hosted release.
+`native-build` is an experimental bootstrap path: it accepts `str` constants, immutable `str` bindings, and `print`/`println` calls whose arguments resolve to static strings. It writes a static x86-64 Linux ELF directly and does not invoke GCC, an assembler, a linker, or libc. The parser/driver are still Python; this restricted path is **not** the normal compiler or a self-hosted release.
 
 ```
 enum Error { Overflow }
