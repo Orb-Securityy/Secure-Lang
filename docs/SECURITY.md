@@ -14,7 +14,7 @@ allocations are not rate-limited).
 
 ## 2. Trusted computing base (what you must still trust)
 `securec` (Python, ~3 kLOC) → generated C → **GCC 13** → glibc on the supported 64-bit ABI. The hand-written runtime is the single
-file `securec/secure_rt.h`. Compile-time assertions enforce the 64-bit `usize`/pointer model, scalar alignment assumptions, and the `pthread_t` size/alignment bound used by stack accounting. A bug in any of these can void the guarantees. There is no formal
+file `securec/secure_rt.h`. Compile-time assertions enforce 8-bit bytes, exact integer object sizes, 1-byte `bool`, 8-byte `f64`, the 64-bit `usize`/pointer model, scalar alignment assumptions, and the `pthread_t` size/alignment bound used by stack accounting. A bug in any of these can void the guarantees. There is no formal
 proof of the checker; the argument is by construction (§3) plus tests. Removing GCC from the TCB (own backend)
 and mechanizing the ownership/borrow rules are roadmap items.
 

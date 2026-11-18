@@ -6,6 +6,7 @@
 #define SECURE_RT_H
 #define _GNU_SOURCE
 #include <stdint.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -24,6 +25,15 @@ typedef struct { char _; } sec_unit;
 /* The checker models usize as 64-bit and tsize() assumes scalar/Task fields
  * have at most 8-byte alignment. Reject unsupported targets rather than
  * silently emitting code with incorrect range or stack-size assumptions. */
+_Static_assert(CHAR_BIT == 8,
+               "Secure bootstrap requires 8-bit bytes");
+_Static_assert(sizeof(bool) == 1 && sizeof(f64) == 8,
+               "Secure bootstrap requires 1-byte bool and 8-byte f64");
+_Static_assert(sizeof(i8) == 1 && sizeof(u8) == 1 &&
+               sizeof(i16) == 2 && sizeof(u16) == 2 &&
+               sizeof(i32) == 4 && sizeof(u32) == 4 &&
+               sizeof(i64) == 8 && sizeof(u64) == 8,
+               "Secure bootstrap requires exact-width integer object sizes");
 _Static_assert(sizeof(usize) == 8 && sizeof(void *) == 8,
                "Secure bootstrap requires a 64-bit size_t and pointer ABI");
 _Static_assert(_Alignof(bool) <= 8 &&

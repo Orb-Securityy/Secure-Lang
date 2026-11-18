@@ -7,7 +7,7 @@
 
 ## Unreleased — target ABI contract
 
-- Enforce the 64-bit `usize`/pointer model and the scalar/`pthread_t` alignment assumptions used by conservative stack-size accounting.
+- Enforce 8-bit bytes, exact integer sizes, 1-byte `bool`, 8-byte `f64`, the 64-bit `usize`/pointer model, and the scalar/`pthread_t` alignment assumptions used by conservative stack-size accounting.
 - Fail compilation on unsupported target ABIs instead of silently compiling with mismatched size/range assumptions.
 
 ## 0.1.21 — call ordering and backend arithmetic hardening
