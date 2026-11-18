@@ -196,6 +196,7 @@ def lower_to_ir(items):
     instructions = []
     next_slot = [0]
     next_label = [0]
+    loop_stack = []
 
     def new_label():
         label = next_label[0]
@@ -216,17 +217,23 @@ def lower_to_ir(items):
         else_label = new_label() if node.els is not None else end_label
         instructions.append(IRCompareBranch(left, cond.op, right, then_label, else_label))
         instructions.append(IRLabel(then_label))
-        lower_block(node.then, bindings)
-        if node.els is not None:
+        then_terminates = lower_block(node.then, bindings)
+        if node.els is None:
+            instructions.append(IRLabel(end_label))
+            return False  # the false condition path reaches the join
+        if not then_terminates:
             instructions.append(IRJump(end_label))
-            instructions.append(IRLabel(else_label))
-            if node.els.k == "Block":
-                lower_block(node.els, bindings)
-            elif node.els.k == "If":
-                lower_if(node.els, bindings)
-            else:
-                _error("unsupported native `else` body", node.els)
+        instructions.append(IRLabel(else_label))
+        if node.els.k == "Block":
+            else_terminates = lower_block(node.els, bindings)
+        elif node.els.k == "If":
+            else_terminates = lower_if(node.els, bindings)
+        else:
+            _error("unsupported native `else` body", node.els)
+        if then_terminates and else_terminates:
+            return True
         instructions.append(IRLabel(end_label))
+        return False
 
     def lower_while(node, bindings):
         cond_label = new_label()
@@ -238,15 +245,19 @@ def lower_to_ir(items):
             _error("native while conditions must compare two i32 values", cond)
         if (_expression_kind(cond.l, bindings, constants) != "i32"
                 or _expression_kind(cond.r, bindings, constants) != "i32"):
+
             _error("native while comparisons require two i32 operands", cond)
         left = _lower_i32(cond.l, bindings, constants, instructions, next_slot)
         right = _lower_i32(cond.r, bindings, constants, instructions, next_slot)
         instructions.append(IRCompareBranch(left, cond.op, right, body_label, end_label))
         instructions.append(IRLabel(body_label))
-        lower_block(node.body, bindings)
-        instructions.append(IRJump(cond_label))
+        loop_stack.append((cond_label, end_label))
+        body_terminates = lower_block(node.body, bindings)
+        loop_stack.pop()
+        if not body_terminates:
+            instructions.append(IRJump(cond_label))
         instructions.append(IRLabel(end_label))
-
+        return False  # the condition may be false on entry or on a later iteration
     def lower_print(call, bindings):
         if call.fn.k != "Var" or call.fn.name not in ("print", "println"):
             _error("native subset supports only `print` and `println`", call)
@@ -266,6 +277,7 @@ def lower_to_ir(items):
         if block.tail is not None and block.tail.k not in ("If", "While"):
             _error("native blocks only support `if` and `while` as tail expressions", block)
         bindings = dict(outer_bindings)
+        terminated = False
         for stmt in block.stmts:
             if stmt.k == "Let":
                 if stmt.name in bindings or stmt.name in constants or stmt.name in ("print", "println"):
@@ -318,13 +330,21 @@ def lower_to_ir(items):
                 lower_if(stmt.e, bindings)
             elif stmt.k == "ExprStmt" and stmt.e.k == "While":
                 lower_while(stmt.e, bindings)
+            elif stmt.k == "ExprStmt" and stmt.e.k in ("Break", "Continue"):
+                if not loop_stack:
+                    _error("native `break`/`continue` must appear inside a `while` loop", stmt.e)
+                cond_label, end_label = loop_stack[-1]
+                instructions.append(IRJump(end_label if stmt.e.k == "Break" else cond_label))
+                terminated = True
+                break
             else:
-                _error("native subset supports bindings, assignments, print calls, and if/while", stmt)
-        if block.tail is not None:
+                _error("native subset supports bindings, assignments, print calls, if/while, break, and continue", stmt)
+        if not terminated and block.tail is not None:
             if block.tail.k == "If":
-                lower_if(block.tail, bindings)
+                terminated = lower_if(block.tail, bindings)
             else:
-                lower_while(block.tail, bindings)
+                terminated = lower_while(block.tail, bindings)
+        return terminated
 
     lower_block(main.body, {})
     instructions.append(IRExit(0))
