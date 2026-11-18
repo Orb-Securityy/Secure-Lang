@@ -1,5 +1,5 @@
 """Python bootstrap frontend/lowering for the restricted native Secure subset."""
-from .ir import IRExit, IRProgram, IRWrite
+from .ir import IRExit, IRPrintI32, IRProgram, IRWrite
 from .lexer import SecError
 from .native_x86_64 import emit_native
 from .parser import parse
@@ -126,11 +126,15 @@ def lower_to_ir(items):
         call = stmt.e
         if call.fn.k != "Var" or call.fn.name not in ("print", "println"):
             _error("native subset supports only `print` and `println`", call)
-        output = bytearray()
         for arg in call.args:
             kind, value = _resolve_static_value(arg, bindings, constants)
-            output += value if kind == "str" else str(value).encode("ascii")
-        instructions.append(IRWrite(bytes(output), call.fn.name == "println"))
+            if kind == "str":
+                if value:
+                    instructions.append(IRWrite(value, False))
+            else:
+                instructions.append(IRPrintI32(value, False))
+        if call.fn.name == "println":
+            instructions.append(IRWrite(b"", True))
     instructions.append(IRExit(0))
     return IRProgram(tuple(instructions))
 
