@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — must-use Result path tracking
+
+- Track unhandled `Result` bindings across blocks, branches, loops, returns, `?`, and short-circuit boolean operators.
+- Do not count a Result consumed only by the conditional RHS of `&&`/`||` as handled, because short-circuiting can skip that call.
+- Add compile-fail regressions for both short-circuit operators and a passing case for unconditional left-operand consumption.
+
 ## 0.1.22 — ABI, conversion, and ownership hardening
 
 - Enforce the target ABI assumed by the compiler: 8-bit bytes, exact integer widths, 1-byte bool, 8-byte f64, full-range 64-bit usize/pointers, scalar alignment limits, and pthread layout bounds.
