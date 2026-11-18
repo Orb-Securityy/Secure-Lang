@@ -142,7 +142,7 @@ def _machine_code(data_length):
     lea_next_ip_offset = len(code) + 4
     displacement = DATA_OFFSET - (CODE_OFFSET + lea_next_ip_offset)
     code += struct.pack("<i", displacement)
-    code += b"\\xba" + struct.pack("<I", data_length)  # mov edx, bytes remaining
+    code += b"\xba" + struct.pack("<I", data_length)  # mov edx, bytes remaining
 
     loop_label = len(code)
     code += bytes.fromhex("0f05")               # syscall: write
