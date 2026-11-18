@@ -29,6 +29,7 @@ python3 bench/run_bench.py          # performance vs unchecked C
 Experimental bootstrap command: `bin/securec native-build examples/native_hello.sec -o hello`.
 
 Integer example: `bin/securec native-build examples/native_i32.sec -o answer`.
+Mutable/control-flow example: `bin/securec native-build examples/native_mutable.sec -o mutable-example`.
 `native-build` is an experimental bootstrap path: it accepts `str` constants and immutable bindings, `i32` constants, immutable and mutable `i32` locals, checked runtime arithmetic and assignments (`=`, `+=`, `-=`, `*=`, `/=`, `%=`), and `if`/`else` blocks using signed `i32` comparisons. Print arguments must be strings or `i32` values. These forms lower to verified immutable IR and a static x86-64 Linux PIE ELF. The verifier checks value-slot definitions, branch targets, reachability, and definite assignment, including mutable stores. The generated code uses Linux syscalls directly and retries interrupted or partial writes. Arithmetic overflow, division by zero, and `INT32_MIN / -1` terminate with panic status 101. Runtime arithmetic, assignments, and conditional branches execute in native machine code. The path does not invoke C, GCC, an assembler, linker, or libc; the parser and driver are still Python, so this is not a self-hosted release.
 
 ```
