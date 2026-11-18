@@ -9,7 +9,7 @@ from .ir import (IRBinaryI32, IRConstI32, IRExit, IRPrintI32, IRUnaryI32,
                  IRValue, IRWrite, MAX_OUTPUT, verify_ir)
 
 
-ELF_BASE = 0x400000
+ELF_BASE = 0  # position-independent image; Linux chooses the load base
 CODE_OFFSET = 0x1000
 DATA_OFFSET = 0x2000
 MAX_STACK_FRAME = 1 << 20
@@ -258,7 +258,7 @@ def _emit_program_code(ir):
 
 
 def _write_elf64(code, data):
-    """Write a static ET_EXEC with RX code, R-only data, and an RW non-exec stack."""
+    """Write a static PIE (ET_DYN) with RX code, R-only data, and an RW non-exec stack."""
     code_segment_size = CODE_OFFSET + len(code)
     ident = b"\x7fELF" + bytes((2, 1, 1, 0, 0)) + bytes(7)
     program_headers = [
@@ -272,7 +272,7 @@ def _write_elf64(code, data):
         ))
     program_headers.append(struct.pack("<IIQQQQQQ", 0x6474E551, 6, 0, 0, 0, 0, 0, 16))
     ehdr = ident + struct.pack(
-        "<HHIQQQIHHHHHH", 2, 62, 1, ELF_BASE + CODE_OFFSET, 64, 0, 0, 64, 56,
+        "<HHIQQQIHHHHHH", 3, 62, 1, CODE_OFFSET, 64, 0, 0, 64, 56,
         len(program_headers), 64, 0, 0,
     )
     header = ehdr + b"".join(program_headers)
