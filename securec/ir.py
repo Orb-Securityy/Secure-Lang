@@ -348,9 +348,14 @@ def verify_ir(ir):
         while worklist:
             index = worklist.popleft()
             queued.discard(index)
-            pred_states = [out_sets[pred] for pred in predecessors[index]]
-            incoming = (set.intersection(*(state for state in pred_states))
-                        if pred_states else set())
+            # The entry has an implicit predecessor carrying the empty
+            # state. A back-edge to instruction zero must never erase that
+            # initial-path fact.
+            if index == 0:
+                incoming = set()
+            else:
+                pred_states = [out_sets[pred] for pred in predecessors[index]]
+                incoming = (set.intersection(*pred_states) if pred_states else set())
             outgoing = incoming | definitions[index]
             if incoming != in_sets[index] or outgoing != out_sets[index]:
                 in_sets[index] = incoming
