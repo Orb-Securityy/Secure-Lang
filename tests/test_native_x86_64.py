@@ -1190,6 +1190,28 @@ class NativeX8664Tests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_mutually_recursive_forward_function_calls_execute(self):
+        source = (
+            'fn even(n: i32) -> i32 {\\n'
+            '    if n == 0 { return 1; } else { return odd(n - 1); }\\n'
+            '}\\n'
+            'fn odd(n: i32) -> i32 {\\n'
+            '    if n == 0 { return 0; } else { return even(n - 1); }\\n'
+            '}\\n'
+            'fn main() { println(even(10)); println(even(9)); }'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'mutual-recursion')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'1\\n0\\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_mutable_parameter_and_zero_argument_function_execute(self):
         source = (
             'fn answer() -> i32 { return 41; }\n'
