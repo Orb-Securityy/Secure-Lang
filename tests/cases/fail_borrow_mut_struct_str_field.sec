@@ -1,0 +1,9 @@
+// EXPECT-ERR: cannot mutably borrow immutable string data
+struct Label { text: str }
+fn wipe(value: &mut str) {
+    zeroize(value.as_mut_slice());
+}
+fn main() {
+    let mut label = Label { text: "immutable" };
+    wipe(&mut label.text);
+}
