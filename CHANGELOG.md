@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — check must-use Results before terminal built-ins
+
+- Reject `exit()` and `panic()` when a local or parameter `Result` is still unhandled, after evaluating the terminal call's arguments.
+- Add compile-fail and positive regressions for both terminal built-ins.
+
 ## Unreleased — must-use Result path tracking
 
 - Track unhandled `Result` bindings across blocks, branches, loops, returns, `?`, and short-circuit boolean operators.
