@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — unsigned left-shift overflow
+
+- Use a full-width unsigned intermediate for unsigned left shifts, avoiding signed `__int128` overflow at extreme `u64`/`usize` values before the overflow check.
+- Preserve signed checked-shift behavior using a signed wide intermediate.
+- Add runtime regressions for `u64::MAX << 63` and `usize::MAX << 63`; UBSan verifies the guard itself performs no undefined operation.
+
 ## Unreleased — empty slice pointer safety
 
 - Avoid undefined null-pointer arithmetic when forming empty slices from `Vec`, `String`, or an existing slice.
