@@ -161,19 +161,19 @@ class NativeX8664Tests(unittest.TestCase):
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_runtime_i32_arithmetic_executes_at_runtime(self):
         source = (
-            'fn main() {\\n'
-            '    let a: i32 = 9;\\n'
-            '    let b: i32 = 4;\\n'
-            '    let sum = a + b;\\n'
-            '    let difference = a - b;\\n'
-            '    let product = a * b;\\n'
-            '    let quotient = a / b;\\n'
-            '    let remainder = a % b;\\n'
-            '    let negative = -a;\\n'
-            '    println(sum, ",", difference, ",", product, ",", quotient, ",", remainder, ",", negative);\\n'
-            '    let n: i32 = -7;\\n'
-            '    let d: i32 = 2;\\n'
-            '    println(n / d, ":", n % d);\\n'
+            'fn main() {\n'
+            '    let a: i32 = 9;\n'
+            '    let b: i32 = 4;\n'
+            '    let sum = a + b;\n'
+            '    let difference = a - b;\n'
+            '    let product = a * b;\n'
+            '    let quotient = a / b;\n'
+            '    let remainder = a % b;\n'
+            '    let negative = -a;\n'
+            '    println(sum, ",", difference, ",", product, ",", quotient, ",", remainder, ",", negative);\n'
+            '    let n: i32 = -7;\n'
+            '    let d: i32 = 2;\n'
+            '    println(n / d, ":", n % d);\n'
             '}'
         )
         image = compile_native_subset(source)
@@ -184,7 +184,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'13,5,36,2,1,-9\\n-3:-1\\n')
+        self.assertEqual(result.stdout, b'13,5,36,2,1,-9\n-3:-1\n')
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
