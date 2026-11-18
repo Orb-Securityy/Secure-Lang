@@ -22,8 +22,9 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertEqual(image[4], 2)  # ELFCLASS64
         self.assertEqual(image[5], 1)  # little endian
         e_type, e_machine = struct.unpack_from('<HH', image, 16)
-        self.assertEqual(e_type, 2)      # ET_EXEC
+        self.assertEqual(e_type, 3)      # ET_DYN static PIE
         self.assertEqual(e_machine, 62) # EM_X86_64
+        self.assertEqual(struct.unpack_from('<Q', image, 24)[0], 0x1000)  # relative entry
         e_phoff = struct.unpack_from('<Q', image, 32)[0]
         e_phentsize, e_phnum = struct.unpack_from('<HH', image, 54)
         self.assertEqual(e_phoff, 64)
@@ -33,6 +34,7 @@ class NativeX8664Tests(unittest.TestCase):
                    for i in range(e_phnum)]
         loads = [h for h in headers if h[0] == 1]
         stack = next(h for h in headers if h[0] == 0x6474E551)
+        self.assertFalse(any(h[0] in (2, 3) for h in headers))  # no PT_DYNAMIC / PT_INTERP
         self.assertEqual(len(loads), 2)
         code, rodata = loads
         self.assertEqual(code[1], 5)    # PF_R | PF_X
