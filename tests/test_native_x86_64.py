@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from securec.lexer import SecError
 from securec.parser import parse
@@ -888,6 +889,22 @@ class NativeX8664Tests(unittest.TestCase):
             execution = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(execution.returncode, 0, execution.stderr)
         self.assertEqual(execution.stdout, b'isolated\n')
+    def test_native_build_works_without_external_toolchain_or_process_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, 'no-toolchain.sec')
+            output = os.path.join(directory, 'no-toolchain')
+            with open(source, 'w', encoding='utf-8') as stream:
+                stream.write('fn main() { println("no external compiler"); }')
+            with patch.dict(os.environ, {'PATH': ''}):
+                with patch('securec.driver.subprocess.run', side_effect=AssertionError(
+                        'native-build must not start a subprocess')):
+                    with patch('securec.driver.subprocess.Popen', side_effect=AssertionError(
+                            'native-build must not spawn a process')):
+                        self.assertEqual(main(['native-build', source, '-o', output]), 0)
+            result = subprocess.run([output], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'no external compiler\\n')
+
     def test_native_build_rejects_c_compiler_flags_and_program_args(self):
         with self.assertRaises(SystemExit):
             main(['native-build', 'unused.sec', '--sanitize'])
