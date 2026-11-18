@@ -169,8 +169,8 @@ def _emit_checked_arithmetic(code, instruction, trap_fixups):
     _emit_store_eax(code, instruction.dest)
 
 
-def _emit_param_store(code, slot, index):
-    """Store one SysV AMD64 i32 argument into its verified local slot."""
+def _emit_param_store(code, slot, index, frame_size):
+    """Store a SysV AMD64 i32 argument from its register/stack ABI slot."""
     encodings = (
         bytes.fromhex("89bc24"),  # edi
         bytes.fromhex("89b424"),  # esi
@@ -180,9 +180,17 @@ def _emit_param_store(code, slot, index):
         bytes.fromhex("44898c24"),  # r9d
     )
     if type(index) is not int or not 0 <= index < MAX_NATIVE_ARGS:
-        raise ValueError("unsupported native parameter register")
-    code.extend(encodings[index])
-    code.extend(struct.pack("<I", _slot_disp(slot)))
+        raise ValueError("native parameter index is out of range")
+    if index < len(encodings):
+        code.extend(encodings[index])
+        code.extend(struct.pack("<I", _slot_disp(slot)))
+    else:
+        source_offset = frame_size + 8 + (index - len(encodings)) * 8
+        if source_offset > 0xFFFFFFFF:
+            raise ValueError("native stack argument displacement is out of range")
+        code.extend(bytes.fromhex("8b8424"))  # mov eax, dword [rsp + incoming stack arg]
+        code.extend(struct.pack("<I", source_offset))
+        _emit_store_eax(code, slot)
 
 
 def _emit_load_argument(code, slot, index):
@@ -195,8 +203,8 @@ def _emit_load_argument(code, slot, index):
         bytes.fromhex("448b8424"),  # r8d
         bytes.fromhex("448b8c24"),  # r9d
     )
-    if type(index) is not int or not 0 <= index < MAX_NATIVE_ARGS:
-        raise ValueError("unsupported native call argument register")
+    if type(index) is not int or not 0 <= index < len(encodings):
+        raise ValueError("native register argument index is out of range")
     code.extend(encodings[index])
     code.extend(struct.pack("<I", _slot_disp(slot)))
 
@@ -242,7 +250,7 @@ def _emit_program_code(ir):
                 code.extend(struct.pack("<I", _slot_disp(instruction.dest)))
                 code.extend(struct.pack("<i", instruction.value))
             elif type(instruction) is IRParamI32:
-                _emit_param_store(code, instruction.dest, instruction.index)
+                _emit_param_store(code, instruction.dest, instruction.index, frame_size)
             elif type(instruction) is IRLocalI32:
                 _emit_load_eax(code, instruction.initial.slot)
                 _emit_store_eax(code, instruction.dest)
@@ -252,11 +260,31 @@ def _emit_program_code(ir):
             elif type(instruction) in (IRUnaryI32, IRBinaryI32):
                 _emit_checked_arithmetic(code, instruction, trap_fixups)
             elif type(instruction) is IRCallI32:
-                for index, argument in enumerate(instruction.args):
+                register_args = instruction.args[:MAX_NATIVE_ARGS if MAX_NATIVE_ARGS < 6 else 6]
+                stack_args = instruction.args[len(register_args):]
+                for index, argument in enumerate(register_args):
                     _emit_load_argument(code, argument.slot, index)
+                outgoing_size = ((len(stack_args) * 8 + 15) // 16) * 16
+                if outgoing_size:
+                    if outgoing_size > MAX_STACK_FRAME:
+                        raise ValueError("native outgoing argument area exceeds its limit")
+                    code.extend(bytes.fromhex("4881ec"))  # sub rsp, outgoing argument area
+                    code.extend(struct.pack("<I", outgoing_size))
+                    for index, argument in enumerate(stack_args):
+                        source_offset = outgoing_size + _slot_disp(argument.slot)
+                        target_offset = index * 8
+                        if source_offset > 0xFFFFFFFF or target_offset > 0xFFFFFFFF:
+                            raise ValueError("native outgoing argument displacement is out of range")
+                        code.extend(bytes.fromhex("8b8424"))  # load local after rsp adjustment
+                        code.extend(struct.pack("<I", source_offset))
+                        code.extend(bytes.fromhex("898424"))  # store low i32 into 8-byte ABI slot
+                        code.extend(struct.pack("<I", target_offset))
                 call_fixups = []
                 _emit_call(code, call_fixups)
                 function_call_fixups.append((call_fixups[0], instruction.function))
+                if outgoing_size:
+                    code.extend(bytes.fromhex("4881c4"))  # restore caller frame
+                    code.extend(struct.pack("<I", outgoing_size))
                 _emit_store_eax(code, instruction.dest)
             elif type(instruction) is IRReturnI32:
                 _emit_load_eax(code, instruction.value.slot)
