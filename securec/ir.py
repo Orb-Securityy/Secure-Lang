@@ -6,6 +6,7 @@ MAX_OUTPUT = 1 << 20
 I32_MIN = -(1 << 31)
 I32_MAX = (1 << 31) - 1
 COMPARE_OPS = ("==", "!=", "<", "<=", ">", ">=")
+MAX_NATIVE_ARGS = 6
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,13 @@ class IRValue:
 class IRConstI32:
     dest: int
     value: int
+
+
+@dataclass(frozen=True)
+class IRParamI32:
+    dest: int
+    index: int
+    mutable: bool = False
 
 
 @dataclass(frozen=True)
@@ -44,6 +52,18 @@ class IRBinaryI32:
     op: str
     left: IRValue
     right: IRValue
+
+
+@dataclass(frozen=True)
+class IRCallI32:
+    dest: int
+    function: str
+    args: tuple
+
+
+@dataclass(frozen=True)
+class IRReturnI32:
+    value: IRValue
 
 
 @dataclass(frozen=True)
@@ -83,170 +103,245 @@ class IRExit:
 
 
 @dataclass(frozen=True)
-class IRProgram:
+class IRFunction:
+    name: str
+    param_count: int
     instructions: tuple
 
 
+@dataclass(frozen=True)
+class IRProgram:
+    instructions: tuple
+    functions: tuple = ()
+
+
 def verify_ir(ir):
-    """Validate SSA-like slots, control-flow labels, definite assignment, and output bounds."""
+    """Validate every native function's slots, calls, CFG, and definite assignment."""
     if type(ir) is not IRProgram or type(ir.instructions) is not tuple or not ir.instructions:
         raise ValueError("invalid native IR program")
-    if type(ir.instructions[-1]) is not IRExit or type(ir.instructions[-1].status) is not int:
-        raise ValueError("native IR must end in a valid exit instruction")
-    if ir.instructions[-1].status != 0:
-        raise ValueError("native IR currently supports only exit(0)")
+    if type(ir.functions) is not tuple:
+        raise ValueError("native IR functions must be a tuple")
 
-    instructions = ir.instructions
-    labels = {}
-    definitions = [set() for _ in instructions]
-    uses = [set() for _ in instructions]
-    output_size = 0
-    next_slot = 0
-    mutable_slots = set()
+    functions = {}
+    for function in ir.functions:
+        if (type(function) is not IRFunction or type(function.name) is not str
+                or not function.name or function.name == "main"
+                or type(function.param_count) is not int
+                or not 0 <= function.param_count <= MAX_NATIVE_ARGS
+                or type(function.instructions) is not tuple or not function.instructions):
+            raise ValueError("invalid native IR function")
+        if function.name in functions:
+            raise ValueError("duplicate native IR function")
+        functions[function.name] = function
 
-    for index, instruction in enumerate(instructions):
-        if type(instruction) is IRLabel:
-            if type(instruction.label) is not int or instruction.label < 0 or instruction.label in labels:
-                raise ValueError("invalid or duplicate native IR label")
-            labels[instruction.label] = index
-        elif type(instruction) is IRConstI32:
-            if type(instruction.dest) is not int or instruction.dest != next_slot:
-                raise ValueError("native IR slots must be defined once in increasing order")
-            if type(instruction.value) is not int or not I32_MIN <= instruction.value <= I32_MAX:
-                raise ValueError("native i32 constant is out of range")
-            definitions[index].add(instruction.dest)
-            next_slot += 1
-        elif type(instruction) is IRLocalI32:
-            if type(instruction.dest) is not int or instruction.dest != next_slot:
-                raise ValueError("native IR slots must be defined once in increasing order")
-            if type(instruction.initial) is not IRValue or type(instruction.initial.slot) is not int:
-                raise ValueError("native mutable local requires an initialized i32 slot")
-            uses[index].add(instruction.initial.slot)
-            definitions[index].add(instruction.dest)
-            mutable_slots.add(instruction.dest)
-            next_slot += 1
-        elif type(instruction) is IRStoreI32:
-            if type(instruction.dest) is not int or instruction.dest not in mutable_slots:
-                raise ValueError("native IR may only assign to a declared mutable local")
-            if type(instruction.value) is not IRValue or type(instruction.value.slot) is not int:
-                raise ValueError("native mutable assignment requires an i32 slot reference")
-            uses[index].update((instruction.dest, instruction.value.slot))
-        elif type(instruction) is IRUnaryI32:
-            if type(instruction.dest) is not int or instruction.dest != next_slot:
-                raise ValueError("native IR slots must be defined once in increasing order")
-            if instruction.op != "-" or type(instruction.operand) is not IRValue:
-                raise ValueError("invalid native unary i32 operation")
-            if type(instruction.operand.slot) is not int:
-                raise ValueError("invalid native i32 slot reference")
-            uses[index].add(instruction.operand.slot)
-            definitions[index].add(instruction.dest)
-            next_slot += 1
-        elif type(instruction) is IRBinaryI32:
-            if type(instruction.dest) is not int or instruction.dest != next_slot:
-                raise ValueError("native IR slots must be defined once in increasing order")
-            if instruction.op not in ("+", "-", "*", "/", "%"):
-                raise ValueError("unsupported native binary i32 operation")
-            if type(instruction.left) is not IRValue or type(instruction.right) is not IRValue:
-                raise ValueError("native binary operands must be i32 slot references")
-            if type(instruction.left.slot) is not int or type(instruction.right.slot) is not int:
-                raise ValueError("invalid native i32 slot reference")
-            uses[index].update((instruction.left.slot, instruction.right.slot))
-            definitions[index].add(instruction.dest)
-            next_slot += 1
-        elif type(instruction) is IRWrite:
-            if index == len(instructions) - 1 or type(instruction.data) is not bytes:
-                raise ValueError("invalid native write instruction")
-            if type(instruction.newline) is not bool:
-                raise ValueError("invalid native write newline flag")
-            output_size += len(instruction.data) + int(instruction.newline)
-        elif type(instruction) is IRPrintI32:
-            if index == len(instructions) - 1 or type(instruction.newline) is not bool:
-                raise ValueError("invalid native i32 print instruction")
-            if type(instruction.value) is int:
-                if not I32_MIN <= instruction.value <= I32_MAX:
-                    raise ValueError("native i32 print operand is out of range")
-            elif type(instruction.value) is IRValue and type(instruction.value.slot) is int:
+    signatures = {name: function.param_count for name, function in functions.items()}
+    output_size = [0]
+
+    def verify_stream(instructions, is_entry, param_count):
+        if type(instructions) is not tuple or not instructions:
+            raise ValueError("native IR stream must not be empty")
+        if is_entry:
+            if type(instructions[-1]) is not IRExit or type(instructions[-1].status) is not int:
+                raise ValueError("native entry IR must end in a valid exit instruction")
+            if instructions[-1].status != 0:
+                raise ValueError("native IR currently supports only exit(0)")
+        elif not any(type(ins) is IRReturnI32 for ins in instructions):
+            raise ValueError("native function must return an i32 value")
+
+        labels = {}
+        definitions = [set() for _ in instructions]
+        uses = [set() for _ in instructions]
+        next_slot = 0
+        mutable_slots = set()
+        expected_param = 0
+        non_param_seen = False
+
+        for index, instruction in enumerate(instructions):
+            if type(instruction) is IRLabel:
+                if (type(instruction.label) is not int or instruction.label < 0
+                        or instruction.label in labels):
+                    raise ValueError("invalid or duplicate native IR label")
+                labels[instruction.label] = index
+            elif type(instruction) is IRParamI32:
+                if (is_entry or non_param_seen or type(instruction.dest) is not int
+                        or instruction.dest != next_slot or type(instruction.index) is not int
+                        or instruction.index != expected_param or instruction.index >= param_count
+                        or type(instruction.mutable) is not bool):
+                    raise ValueError("invalid or misplaced native i32 parameter")
+                definitions[index].add(instruction.dest)
+                if instruction.mutable:
+                    mutable_slots.add(instruction.dest)
+                next_slot += 1
+                expected_param += 1
+            elif type(instruction) is IRConstI32:
+                non_param_seen = True
+                if type(instruction.dest) is not int or instruction.dest != next_slot:
+                    raise ValueError("native IR slots must be defined once in increasing order")
+                if type(instruction.value) is not int or not I32_MIN <= instruction.value <= I32_MAX:
+                    raise ValueError("native i32 constant is out of range")
+                definitions[index].add(instruction.dest)
+                next_slot += 1
+            elif type(instruction) is IRLocalI32:
+                non_param_seen = True
+                if type(instruction.dest) is not int or instruction.dest != next_slot:
+                    raise ValueError("native IR slots must be defined once in increasing order")
+                if type(instruction.initial) is not IRValue or type(instruction.initial.slot) is not int:
+                    raise ValueError("native mutable local requires an initialized i32 slot")
+                uses[index].add(instruction.initial.slot)
+                definitions[index].add(instruction.dest)
+                mutable_slots.add(instruction.dest)
+                next_slot += 1
+            elif type(instruction) is IRStoreI32:
+                non_param_seen = True
+                if type(instruction.dest) is not int or instruction.dest not in mutable_slots:
+                    raise ValueError("native IR may only assign to a declared mutable local")
+                if type(instruction.value) is not IRValue or type(instruction.value.slot) is not int:
+                    raise ValueError("native mutable assignment requires an i32 slot reference")
+                uses[index].update((instruction.dest, instruction.value.slot))
+            elif type(instruction) is IRUnaryI32:
+                non_param_seen = True
+                if type(instruction.dest) is not int or instruction.dest != next_slot:
+                    raise ValueError("native IR slots must be defined once in increasing order")
+                if instruction.op != "-" or type(instruction.operand) is not IRValue:
+                    raise ValueError("invalid native unary i32 operation")
+                if type(instruction.operand.slot) is not int:
+                    raise ValueError("invalid native i32 slot reference")
+                uses[index].add(instruction.operand.slot)
+                definitions[index].add(instruction.dest)
+                next_slot += 1
+            elif type(instruction) is IRBinaryI32:
+                non_param_seen = True
+                if type(instruction.dest) is not int or instruction.dest != next_slot:
+                    raise ValueError("native IR slots must be defined once in increasing order")
+                if instruction.op not in ("+", "-", "*", "/", "%"):
+                    raise ValueError("unsupported native binary i32 operation")
+                if type(instruction.left) is not IRValue or type(instruction.right) is not IRValue:
+                    raise ValueError("native binary operands must be i32 slot references")
+                if type(instruction.left.slot) is not int or type(instruction.right.slot) is not int:
+                    raise ValueError("invalid native i32 slot reference")
+                uses[index].update((instruction.left.slot, instruction.right.slot))
+                definitions[index].add(instruction.dest)
+                next_slot += 1
+            elif type(instruction) is IRCallI32:
+                non_param_seen = True
+                if type(instruction.dest) is not int or instruction.dest != next_slot:
+                    raise ValueError("native call result slot must be defined in sequence")
+                if type(instruction.function) is not str or instruction.function not in signatures:
+                    raise ValueError("native call references an unknown function")
+                if type(instruction.args) is not tuple or len(instruction.args) != signatures[instruction.function]:
+                    raise ValueError("native call argument count does not match its function")
+                for argument in instruction.args:
+                    if type(argument) is not IRValue or type(argument.slot) is not int:
+                        raise ValueError("native call arguments must be i32 slot references")
+                    uses[index].add(argument.slot)
+                definitions[index].add(instruction.dest)
+                next_slot += 1
+            elif type(instruction) is IRReturnI32:
+                non_param_seen = True
+                if is_entry or type(instruction.value) is not IRValue or type(instruction.value.slot) is not int:
+                    raise ValueError("invalid native i32 return instruction")
                 uses[index].add(instruction.value.slot)
+            elif type(instruction) is IRWrite:
+                non_param_seen = True
+                if type(instruction.data) is not bytes or type(instruction.newline) is not bool:
+                    raise ValueError("invalid native write instruction")
+                output_size[0] += len(instruction.data) + int(instruction.newline)
+            elif type(instruction) is IRPrintI32:
+                non_param_seen = True
+                if type(instruction.newline) is not bool:
+                    raise ValueError("invalid native i32 print instruction")
+                if type(instruction.value) is int:
+                    if not I32_MIN <= instruction.value <= I32_MAX:
+                        raise ValueError("native i32 print operand is out of range")
+                elif type(instruction.value) is IRValue and type(instruction.value.slot) is int:
+                    uses[index].add(instruction.value.slot)
+                else:
+                    raise ValueError("native i32 print operand must be an integer or slot reference")
+                output_size[0] += 11 + int(instruction.newline)
+            elif type(instruction) is IRJump:
+                non_param_seen = True
+                if type(instruction.target) is not int or instruction.target < 0:
+                    raise ValueError("invalid native jump target")
+            elif type(instruction) is IRCompareBranch:
+                non_param_seen = True
+                if instruction.op not in COMPARE_OPS:
+                    raise ValueError("unsupported native comparison operator")
+                if type(instruction.left) is not IRValue or type(instruction.right) is not IRValue:
+                    raise ValueError("native branch operands must be i32 slot references")
+                if type(instruction.left.slot) is not int or type(instruction.right.slot) is not int:
+                    raise ValueError("invalid native branch operand slot")
+                if (type(instruction.true_target) is not int or instruction.true_target < 0
+                        or type(instruction.false_target) is not int or instruction.false_target < 0):
+                    raise ValueError("invalid native conditional target")
+                uses[index].update((instruction.left.slot, instruction.right.slot))
+            elif type(instruction) is IRExit:
+                non_param_seen = True
+                if (not is_entry or index != len(instructions) - 1
+                        or type(instruction.status) is not int or instruction.status != 0):
+                    raise ValueError("invalid or misplaced native exit instruction")
             else:
-                raise ValueError("native i32 print operand must be an integer or slot reference")
-            output_size += 11 + int(instruction.newline)
-        elif type(instruction) is IRLabel:
-            pass
-        elif type(instruction) is IRJump:
-            if type(instruction.target) is not int or instruction.target < 0:
-                raise ValueError("invalid native jump target")
-        elif type(instruction) is IRCompareBranch:
-            if instruction.op not in COMPARE_OPS:
-                raise ValueError("unsupported native comparison operator")
-            if type(instruction.left) is not IRValue or type(instruction.right) is not IRValue:
-                raise ValueError("native branch operands must be i32 slot references")
-            if type(instruction.left.slot) is not int or type(instruction.right.slot) is not int:
-                raise ValueError("invalid native branch operand slot")
-            if (type(instruction.true_target) is not int or instruction.true_target < 0
-                    or type(instruction.false_target) is not int or instruction.false_target < 0):
-                raise ValueError("invalid native conditional target")
-            uses[index].update((instruction.left.slot, instruction.right.slot))
-        elif type(instruction) is IRExit:
-            if index != len(instructions) - 1 or type(instruction.status) is not int or instruction.status != 0:
-                raise ValueError("invalid or misplaced native exit instruction")
-        else:
-            raise ValueError("unknown native IR instruction")
-        if output_size > MAX_OUTPUT:
-            raise ValueError("native output exceeds the 1 MiB limit")
+                raise ValueError("unknown native IR instruction")
 
-    for instruction in instructions:
-        if type(instruction) is IRJump and instruction.target not in labels:
-            raise ValueError("native jump references an undefined label")
-        if type(instruction) is IRCompareBranch:
-            if instruction.true_target not in labels or instruction.false_target not in labels:
-                raise ValueError("native conditional branch references an undefined label")
+            if output_size[0] > MAX_OUTPUT:
+                raise ValueError("native output exceeds the 1 MiB limit")
 
-    successors = [[] for _ in instructions]
-    predecessors = [[] for _ in instructions]
-    for index, instruction in enumerate(instructions):
-        if type(instruction) is IRExit:
-            targets = []
-        elif type(instruction) is IRJump:
-            targets = [labels[instruction.target]]
-        elif type(instruction) is IRCompareBranch:
-            targets = [labels[instruction.true_target], labels[instruction.false_target]]
-        else:
-            if index + 1 >= len(instructions):
-                raise ValueError("native IR falls through without an exit")
-            targets = [index + 1]
-        successors[index] = targets
-        for target in targets:
-            predecessors[target].append(index)
+        if expected_param != param_count:
+            raise ValueError("native function parameter layout is incomplete")
 
-    reachable = set()
-    pending = [0]
-    while pending:
-        index = pending.pop()
-        if index in reachable:
-            continue
-        reachable.add(index)
-        pending.extend(successors[index])
-    if len(reachable) != len(instructions):
-        raise ValueError("native IR contains unreachable instructions")
+        for instruction in instructions:
+            if type(instruction) is IRJump and instruction.target not in labels:
+                raise ValueError("native jump references an undefined label")
+            if type(instruction) is IRCompareBranch:
+                if instruction.true_target not in labels or instruction.false_target not in labels:
+                    raise ValueError("native conditional branch references an undefined label")
 
-    all_slots = set(range(next_slot))
-    in_sets = [set(all_slots) for _ in instructions]
-    out_sets = [set(all_slots) for _ in instructions]
-    in_sets[0] = set()
-    changed = True
-    while changed:
-        changed = False
+        successors = [[] for _ in instructions]
+        predecessors = [[] for _ in instructions]
+        for index, instruction in enumerate(instructions):
+            if type(instruction) in (IRExit, IRReturnI32):
+                targets = []
+            elif type(instruction) is IRJump:
+                targets = [labels[instruction.target]]
+            elif type(instruction) is IRCompareBranch:
+                targets = [labels[instruction.true_target], labels[instruction.false_target]]
+            else:
+                if index + 1 >= len(instructions):
+                    raise ValueError("native IR falls through without an exit or return")
+                targets = [index + 1]
+            successors[index] = targets
+            for target in targets:
+                predecessors[target].append(index)
+
+        reachable = set()
+        pending = [0]
+        while pending:
+            index = pending.pop()
+            if index in reachable:
+                continue
+            reachable.add(index)
+            pending.extend(successors[index])
+        if len(reachable) != len(instructions):
+            raise ValueError("native IR contains unreachable instructions")
+
+        all_slots = set(range(next_slot))
+        in_sets = [set(all_slots) for _ in instructions]
+        out_sets = [set(all_slots) for _ in instructions]
+        changed = True
+        while changed:
+            changed = False
+            for index in sorted(reachable):
+                incoming = set() if index == 0 else set.intersection(
+                    *(out_sets[pred] for pred in predecessors[index])
+                )
+                outgoing = incoming | definitions[index]
+                if incoming != in_sets[index] or outgoing != out_sets[index]:
+                    in_sets[index], out_sets[index] = incoming, outgoing
+                    changed = True
+
         for index in sorted(reachable):
-            if index == 0:
-                incoming = set()  # function entry is an additional predecessor with no values
-            else:
-                incoming = set.intersection(*(out_sets[pred] for pred in predecessors[index]))
-            outgoing = incoming | definitions[index]
-            if incoming != in_sets[index] or outgoing != out_sets[index]:
-                in_sets[index], out_sets[index] = incoming, outgoing
-                changed = True
+            if not uses[index].issubset(in_sets[index]):
+                raise ValueError("native IR uses an undefined i32 value on at least one control-flow path")
 
-    for index in sorted(reachable):
-        if not uses[index].issubset(in_sets[index]):
-            raise ValueError("native IR uses an undefined i32 value on at least one control-flow path")
-    return output_size
+    verify_stream(ir.instructions, True, 0)
+    for function in ir.functions:
+        verify_stream(function.instructions, False, function.param_count)
