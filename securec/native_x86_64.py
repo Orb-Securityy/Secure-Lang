@@ -65,7 +65,7 @@ def _machine_code(data_length):
 
 
 def build_elf64(data):
-    """Return a minimal static x86-64 Linux ET_EXEC image containing one RX load segment."""
+    """Return a minimal static x86-64 Linux ET_EXEC image with RX code and R-only data segments."""
     data = bytes(data)
     if len(data) > MAX_OUTPUT:
         raise ValueError("native output exceeds the 1 MiB limit")
