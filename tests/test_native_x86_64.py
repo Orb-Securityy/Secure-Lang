@@ -9,7 +9,8 @@ import unittest
 from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
-from securec.ir import MAX_OUTPUT, IRExit, IRPrintI32, IRProgram, IRWrite, verify_ir
+from securec.ir import (MAX_OUTPUT, IRBinaryI32, IRConstI32, IRExit, IRPrintI32,
+                        IRProgram, IRUnaryI32, IRValue, IRWrite, verify_ir)
 from securec.native_lower import compile_native_subset, lower_to_ir
 from securec.native_x86_64 import emit_native
 
@@ -156,6 +157,70 @@ class NativeX8664Tests(unittest.TestCase):
             result = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, b'Answer: 42\n')
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_runtime_i32_arithmetic_executes_at_runtime(self):
+        source = (
+            'fn main() {\\n'
+            '    let a: i32 = 9;\\n'
+            '    let b: i32 = 4;\\n'
+            '    let sum = a + b;\\n'
+            '    let difference = a - b;\\n'
+            '    let product = a * b;\\n'
+            '    let quotient = a / b;\\n'
+            '    let remainder = a % b;\\n'
+            '    let negative = -a;\\n'
+            '    println(sum, ",", difference, ",", product, ",", quotient, ",", remainder, ",", negative);\\n'
+            '    let n: i32 = -7;\\n'
+            '    let d: i32 = 2;\\n'
+            '    println(n / d, ":", n % d);\\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'runtime-arithmetic')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'13,5,36,2,1,-9\\n-3:-1\\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_runtime_i32_overflow_and_division_trap_with_101(self):
+        programs = [
+            'fn main() { let a: i32 = 2147483647; let b: i32 = 1; println(a + b); }',
+            'fn main() { let a: i32 = -2147483648; let b: i32 = 1; println(a - b); }',
+            'fn main() { let a: i32 = 50000; let b: i32 = 50000; println(a * b); }',
+            'fn main() { let a: i32 = 5; let b: i32 = 0; println(a / b); }',
+            'fn main() { let a: i32 = -2147483648; let b: i32 = -1; println(a / b); }',
+            'fn main() { let a: i32 = -2147483648; let b: i32 = -1; println(a % b); }',
+            'fn main() { let a: i32 = -2147483648; let b = -a; println(b); }',
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            for index, source in enumerate(programs):
+                with self.subTest(source=source):
+                    path = os.path.join(directory, f'trap-{index}')
+                    image = compile_native_subset(source)
+                    with open(path, 'xb') as executable:
+                        executable.write(image)
+                    os.chmod(path, 0o755)
+                    result = subprocess.run([path], capture_output=True, check=False)
+                    self.assertEqual(result.returncode, 101, result.stderr)
+
+    def test_native_ir_verifier_rejects_invalid_i32_slots(self):
+        invalid = [
+            IRProgram((IRConstI32(1, 7), IRExit(0))),
+            IRProgram((IRConstI32(0, 1), IRConstI32(0, 2), IRExit(0))),
+            IRProgram((IRUnaryI32(0, '-', IRValue(3)), IRExit(0))),
+            IRProgram((IRBinaryI32(0, '&', IRValue(0), IRValue(0)), IRExit(0))),
+            IRProgram((IRPrintI32(IRValue(5), False), IRExit(0))),
+        ]
+        for ir in invalid:
+            with self.subTest(ir=ir):
+                with self.assertRaises(ValueError):
+                    verify_ir(ir)
     def test_native_i32_rejects_overflow_division_errors_and_wrong_types(self):
         unsupported = [
             'fn main() { println(2147483648); }',
