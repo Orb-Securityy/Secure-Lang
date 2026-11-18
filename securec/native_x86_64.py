@@ -5,8 +5,9 @@ assembler, linker, or C runtime. It consumes only the shared immutable IR contra
 """
 import struct
 
-from .ir import (IRBinaryI32, IRCompareBranch, IRConstI32, IRExit, IRJump, IRLabel, IRLocalI32, IRPrintI32, IRStoreI32, IRUnaryI32,
-                 IRValue, IRWrite, MAX_OUTPUT, verify_ir)
+from .ir import (IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit, IRFunction, IRJump, IRLabel,
+                 IRLocalI32, IRParamI32, IRPrintI32, IRReturnI32, IRStoreI32, IRUnaryI32,
+                 IRValue, IRWrite, MAX_OUTPUT, MAX_NATIVE_ARGS, verify_ir)
 
 
 ELF_BASE = 0  # position-independent image; Linux chooses the load base
@@ -168,80 +169,152 @@ def _emit_checked_arithmetic(code, instruction, trap_fixups):
     _emit_store_eax(code, instruction.dest)
 
 
+def _emit_param_store(code, slot, index):
+    """Store one SysV AMD64 i32 argument into its verified local slot."""
+    encodings = (
+        bytes.fromhex("89bc24"),  # edi
+        bytes.fromhex("89b424"),  # esi
+        bytes.fromhex("899424"),  # edx
+        bytes.fromhex("898c24"),  # ecx
+        bytes.fromhex("44898424"),  # r8d
+        bytes.fromhex("44898c24"),  # r9d
+    )
+    if type(index) is not int or not 0 <= index < MAX_NATIVE_ARGS:
+        raise ValueError("unsupported native parameter register")
+    code.extend(encodings[index])
+    code.extend(struct.pack("<I", _slot_disp(slot)))
+
+
+def _emit_load_argument(code, slot, index):
+    """Load one i32 call argument into its SysV AMD64 register."""
+    encodings = (
+        bytes.fromhex("8bbc24"),  # edi
+        bytes.fromhex("8bb424"),  # esi
+        bytes.fromhex("8b9424"),  # edx
+        bytes.fromhex("8b8c24"),  # ecx
+        bytes.fromhex("448b8424"),  # r8d
+        bytes.fromhex("448b8c24"),  # r9d
+    )
+    if type(index) is not int or not 0 <= index < MAX_NATIVE_ARGS:
+        raise ValueError("unsupported native call argument register")
+    code.extend(encodings[index])
+    code.extend(struct.pack("<I", _slot_disp(slot)))
+
+
 def _emit_program_code(ir):
     code = bytearray()
     rodata = bytearray()
-    call_fixups = []
+    write_call_fixups = []
+    function_call_fixups = []
     lea_fixups = []
     trap_fixups = []
     needs_write_helper = False
     label_offsets = {}
     control_fixups = []
-    slot_count = sum(type(ins) in (IRConstI32, IRLocalI32, IRUnaryI32, IRBinaryI32) for ins in ir.instructions)
-    needs_stack_buffer = any(type(ins) is IRPrintI32 for ins in ir.instructions)
-    frame_size = 0
-    if slot_count or needs_stack_buffer:
-        frame_size = ((32 + slot_count * 4 + 15) // 16) * 16
+    function_offsets = {}
+
+    def emit_stream(instructions, scope, is_entry, param_count):
+        nonlocal needs_write_helper
+        slot_types = (IRConstI32, IRParamI32, IRLocalI32, IRUnaryI32, IRBinaryI32, IRCallI32)
+        slot_count = sum(type(ins) in slot_types for ins in instructions)
+        needs_stack_buffer = any(type(ins) is IRPrintI32 for ins in instructions)
+        local_bytes = (32 if needs_stack_buffer else 0) + slot_count * 4
+        if local_bytes:
+            if is_entry:
+                frame_size = ((local_bytes + 15) // 16) * 16
+            else:
+                # At a SysV function entry RSP is 8 mod 16. Reserve a frame
+                # that both covers locals and restores 16-byte call alignment.
+                frame_size = ((local_bytes + 8 + 15) // 16) * 16 - 8
+                if frame_size < local_bytes:
+                    frame_size += 16
+        else:
+            frame_size = 0
         if frame_size > MAX_STACK_FRAME:
             raise ValueError("native stack frame exceeds its limit")
-        code.extend(bytes.fromhex("4881ec"))      # sub rsp, imm32
-        code.extend(struct.pack("<I", frame_size))
+        if frame_size:
+            code.extend(bytes.fromhex("4881ec"))  # sub rsp, imm32
+            code.extend(struct.pack("<I", frame_size))
 
-    for instruction in ir.instructions:
-        if type(instruction) is IRConstI32:
-            code.extend(bytes.fromhex("c78424"))
-            code.extend(struct.pack("<I", _slot_disp(instruction.dest)))
-            code.extend(struct.pack("<i", instruction.value))
-        elif type(instruction) is IRLocalI32:
-            _emit_load_eax(code, instruction.initial.slot)
-            _emit_store_eax(code, instruction.dest)
-        elif type(instruction) is IRStoreI32:
-            _emit_load_eax(code, instruction.value.slot)
-            _emit_store_eax(code, instruction.dest)
-        elif type(instruction) in (IRUnaryI32, IRBinaryI32):
-            _emit_checked_arithmetic(code, instruction, trap_fixups)
-        elif type(instruction) is IRWrite:
-            output = instruction.data + (b"\n" if instruction.newline else b"")
-            if not output:
-                continue
-            data_offset = len(rodata)
-            rodata.extend(output)
-            code.extend(bytes.fromhex("488d35"))
-            lea_fixups.append((len(code), data_offset))
-            code.extend(bytes(4))
-            code.append(0xBA)                   # mov edx, imm32
-            code.extend(struct.pack("<I", len(output)))
-            _emit_call(code, call_fixups)
-            needs_write_helper = True
-        elif type(instruction) is IRPrintI32:
-            _emit_i32_formatter(code, instruction.value, instruction.newline, call_fixups)
-            needs_write_helper = True
-        elif type(instruction) is IRCompareBranch:
-            _emit_load_eax(code, instruction.left.slot)
-            _emit_load_ecx(code, instruction.right.slot)
-            code.extend(bytes.fromhex("39c8"))  # cmp eax, ecx
-            condition_codes = {"==": 0x84, "!=": 0x85, "<": 0x8C,
-                               "<=": 0x8E, ">": 0x8F, ">=": 0x8D}
-            branch_fixups = []
-            _emit_jcc32(code, condition_codes[instruction.op], branch_fixups)
-            control_fixups.append((branch_fixups[0], instruction.true_target))
-            jump_fixups = []
-            _emit_jmp32(code, jump_fixups)
-            control_fixups.append((jump_fixups[0], instruction.false_target))
-        elif type(instruction) is IRJump:
-            jump_fixups = []
-            _emit_jmp32(code, jump_fixups)
-            control_fixups.append((jump_fixups[0], instruction.target))
-        elif type(instruction) is IRLabel:
-            if instruction.label in label_offsets:
-                raise ValueError("duplicate native code label")
-            label_offsets[instruction.label] = len(code)
-        elif type(instruction) is IRExit:
-            continue  # verify_ir requires this to be the final instruction
-        else:
-            raise ValueError("unknown native IR instruction")
+        for instruction in instructions:
+            if type(instruction) is IRConstI32:
+                code.extend(bytes.fromhex("c78424"))
+                code.extend(struct.pack("<I", _slot_disp(instruction.dest)))
+                code.extend(struct.pack("<i", instruction.value))
+            elif type(instruction) is IRParamI32:
+                _emit_param_store(code, instruction.dest, instruction.index)
+            elif type(instruction) is IRLocalI32:
+                _emit_load_eax(code, instruction.initial.slot)
+                _emit_store_eax(code, instruction.dest)
+            elif type(instruction) is IRStoreI32:
+                _emit_load_eax(code, instruction.value.slot)
+                _emit_store_eax(code, instruction.dest)
+            elif type(instruction) in (IRUnaryI32, IRBinaryI32):
+                _emit_checked_arithmetic(code, instruction, trap_fixups)
+            elif type(instruction) is IRCallI32:
+                for index, argument in enumerate(instruction.args):
+                    _emit_load_argument(code, argument.slot, index)
+                call_fixups = []
+                _emit_call(code, call_fixups)
+                function_call_fixups.append((call_fixups[0], instruction.function))
+                _emit_store_eax(code, instruction.dest)
+            elif type(instruction) is IRReturnI32:
+                _emit_load_eax(code, instruction.value.slot)
+                if frame_size:
+                    code.extend(bytes.fromhex("4881c4"))  # add rsp, imm32
+                    code.extend(struct.pack("<I", frame_size))
+                code.append(0xC3)  # ret
+            elif type(instruction) is IRWrite:
+                output = instruction.data + (b"\n" if instruction.newline else b"")
+                if not output:
+                    continue
+                data_offset = len(rodata)
+                rodata.extend(output)
+                code.extend(bytes.fromhex("488d35"))
+                lea_fixups.append((len(code), data_offset))
+                code.extend(bytes(4))
+                code.append(0xBA)  # mov edx, imm32
+                code.extend(struct.pack("<I", len(output)))
+                call_fixups = []
+                _emit_call(code, call_fixups)
+                write_call_fixups.append(call_fixups[0])
+                needs_write_helper = True
+            elif type(instruction) is IRPrintI32:
+                _emit_i32_formatter(code, instruction.value, instruction.newline, write_call_fixups)
+                needs_write_helper = True
+            elif type(instruction) is IRCompareBranch:
+                _emit_load_eax(code, instruction.left.slot)
+                _emit_load_ecx(code, instruction.right.slot)
+                code.extend(bytes.fromhex("39c8"))  # cmp eax, ecx
+                condition_codes = {"==": 0x84, "!=": 0x85, "<": 0x8C,
+                                   "<=": 0x8E, ">": 0x8F, ">=": 0x8D}
+                branch_fixups = []
+                _emit_jcc32(code, condition_codes[instruction.op], branch_fixups)
+                control_fixups.append((branch_fixups[0], scope, instruction.true_target))
+                jump_fixups = []
+                _emit_jmp32(code, jump_fixups)
+                control_fixups.append((jump_fixups[0], scope, instruction.false_target))
+            elif type(instruction) is IRJump:
+                jump_fixups = []
+                _emit_jmp32(code, jump_fixups)
+                control_fixups.append((jump_fixups[0], scope, instruction.target))
+            elif type(instruction) is IRLabel:
+                key = (scope, instruction.label)
+                if key in label_offsets:
+                    raise ValueError("duplicate native code label")
+                label_offsets[key] = len(code)
+            elif type(instruction) is IRExit:
+                code.extend(bytes.fromhex("b83c00000031ff0f05"))  # exit(0)
+            else:
+                raise ValueError("unknown native IR instruction")
 
-    code.extend(bytes.fromhex("b83c00000031ff0f05"))  # exit(0)
+    emit_stream(ir.instructions, None, True, 0)
+    for function in ir.functions:
+        if type(function) is not IRFunction or function.name in function_offsets:
+            raise ValueError("invalid or duplicate native function")
+        function_offsets[function.name] = len(code)
+        emit_stream(function.instructions, function.name, False, function.param_count)
+
     if needs_write_helper:
         helper = len(code)
         loop = helper
@@ -264,7 +337,7 @@ def _emit_program_code(ir):
         _patch_rel8(code, retry_branch, loop)
         _patch_rel8(code, fail_branch, fail_label)
         _patch_rel8(code, again_branch, loop)
-        for position in call_fixups:
+        for position in write_call_fixups:
             _patch_rel32(code, position, helper)
 
     if trap_fixups:
@@ -273,10 +346,17 @@ def _emit_program_code(ir):
         for position in trap_fixups:
             _patch_rel32(code, position, panic_label)
 
-    for position, target_label in control_fixups:
-        if target_label not in label_offsets:
+    for position, function_name in function_call_fixups:
+        target = function_offsets.get(function_name)
+        if target is None:
+            raise ValueError("native call references an unknown function")
+        _patch_rel32(code, position, target)
+
+    for position, scope, target_label in control_fixups:
+        target = label_offsets.get((scope, target_label))
+        if target is None:
             raise ValueError("native branch targets an unknown code label")
-        _patch_rel32(code, position, label_offsets[target_label])
+        _patch_rel32(code, position, target)
 
     for position, data_offset in lea_fixups:
         target = ELF_BASE + DATA_OFFSET + data_offset
@@ -288,7 +368,6 @@ def _emit_program_code(ir):
     if len(rodata) > MAX_OUTPUT:
         raise ValueError("native data exceeds the 1 MiB limit")
     return bytes(code), bytes(rodata)
-
 
 def _write_elf64(code, data):
     """Write a static PIE (ET_DYN) with RX code, R-only data, and an RW non-exec stack."""
