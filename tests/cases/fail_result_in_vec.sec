@@ -1,0 +1,5 @@
+// EXPECT-ERR: Result values cannot be stored in Vec<T>
+fn main() -> i32 {
+    let mut values: Vec<Result<i32, i32>> = Vec::new();
+    return 0;
+}
