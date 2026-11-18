@@ -1,0 +1,5 @@
+// EXPECT-ERR: unused `Result` binding `ignored`
+fn make() -> Result<i32, i32> { Err(7) }
+fn main() {
+    let ignored = make();
+}
