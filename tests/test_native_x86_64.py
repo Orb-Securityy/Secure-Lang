@@ -9,9 +9,10 @@ import unittest
 from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
-from securec.ir import (MAX_OUTPUT, IRBinaryI32, IRCompareBranch, IRConstI32,
-                        IRExit, IRJump, IRLabel, IRLocalI32, IRPrintI32, IRProgram,
-                        IRStoreI32, IRUnaryI32, IRValue, IRWrite, verify_ir)
+from securec.ir import (MAX_OUTPUT, IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32,
+                        IRExit, IRFunction, IRJump, IRLabel, IRLocalI32, IRParamI32,
+                        IRPrintI32, IRProgram, IRReturnI32, IRStoreI32, IRUnaryI32,
+                        IRValue, IRWrite, verify_ir)
 from securec.native_lower import compile_native_subset, lower_to_ir
 from securec.native_x86_64 import emit_native
 
@@ -46,6 +47,31 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertGreater(rodata[5], 0)
         self.assertEqual(stack[1], 6)   # PF_R | PF_W, never executable
         self.assertTrue(all(not (h[1] & 2 and h[1] & 1) for h in loads))
+
+    def test_native_elf_segments_are_bounded_aligned_and_non_writable_executable(self):
+        image = compile_native_subset('fn main() { println("ELF audit"); }')
+        e_type, machine = struct.unpack_from('<HH', image, 16)
+        self.assertEqual((e_type, machine), (3, 62))
+        entry = struct.unpack_from('<Q', image, 24)[0]
+        phoff = struct.unpack_from('<Q', image, 32)[0]
+        phentsize, phnum = struct.unpack_from('<HH', image, 54)
+        self.assertEqual(phentsize, 56)
+        self.assertLessEqual(phoff + phentsize * phnum, len(image))
+        headers = [struct.unpack_from('<IIQQQQQQ', image, phoff + i * phentsize)
+                   for i in range(phnum)]
+        executable_entry_found = False
+        for kind, flags, offset, vaddr, _paddr, filesz, memsz, align in headers:
+            if kind == 1:
+                self.assertGreaterEqual(align, 0x1000)
+                self.assertEqual(offset % align, vaddr % align)
+                self.assertLessEqual(offset + filesz, len(image))
+                self.assertLessEqual(filesz, memsz)
+                self.assertFalse(flags & 2 and flags & 1)
+                if flags & 1:
+                    executable_entry_found = vaddr <= entry < vaddr + memsz
+            elif kind == 0x6474E551:
+                self.assertFalse(flags & 1)
+        self.assertTrue(executable_entry_found)
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
@@ -708,6 +734,41 @@ class NativeX8664Tests(unittest.TestCase):
                     os.chmod(path, 0o755)
                     result = subprocess.run([path], capture_output=True, check=False)
                     self.assertEqual(result.returncode, 101, result.stderr)
+
+    def test_native_ir_verifier_rejects_malformed_function_contracts(self):
+        valid_fn = IRFunction(
+            "identity", 1,
+            (IRParamI32(0, 0), IRReturnI32(IRValue(0))),
+        )
+        valid = IRProgram(
+            (IRConstI32(0, 42), IRCallI32(1, "identity", (IRValue(0),)),
+             IRPrintI32(IRValue(1), True), IRExit(0)),
+            (valid_fn,),
+        )
+        self.assertGreater(len(emit_native(valid)), 0)
+
+        invalid = [
+            IRProgram((IRCallI32(0, "missing", ()), IRExit(0)), (valid_fn,)),
+            IRProgram((IRConstI32(0, 1), IRCallI32(1, "identity", ()), IRExit(0)),
+                      (valid_fn,)),
+            IRProgram((IRExit(0),), (
+                IRFunction("broken", 0, (IRReturnI32(IRValue(0)),)),
+            )),
+            IRProgram((IRExit(0),), (
+                IRFunction("broken", 0, (IRExit(0),)),
+            )),
+            IRProgram((IRExit(0),), (valid_fn, valid_fn)),
+            IRProgram((IRExit(0),), (
+                IRFunction("broken", 1, (IRParamI32(0, 1), IRReturnI32(IRValue(0)))),
+            )),
+            IRProgram((IRExit(0),), (
+                IRFunction("broken", 1, (IRParamI32(0, 0),)),
+            )),
+        ]
+        for ir in invalid:
+            with self.subTest(ir=ir):
+                with self.assertRaises(ValueError):
+                    verify_ir(ir)
 
     def test_native_ir_verifier_rejects_stores_to_immutable_slots(self):
         invalid = [
