@@ -195,15 +195,15 @@ class NativeX8664Tests(unittest.TestCase):
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_if_else_executes_all_signed_comparisons(self):
         source = (
-            'fn main() {\\n'
-            '    let a: i32 = 4;\\n'
-            '    let b: i32 = 9;\\n'
-            '    if a == b { print("1"); } else { print("0"); }\\n'
-            '    if a != b { print("1"); } else { print("0"); }\\n'
-            '    if a < b { print("1"); } else { print("0"); }\\n'
-            '    if a <= b { print("1"); } else { print("0"); }\\n'
-            '    if a > b { print("1"); } else { print("0"); }\\n'
-            '    if a >= b { println("1"); } else { println("0"); }\\n'
+            'fn main() {\n'
+            '    let a: i32 = 4;\n'
+            '    let b: i32 = 9;\n'
+            '    if a == b { print("1"); } else { print("0"); }\n'
+            '    if a != b { print("1"); } else { print("0"); }\n'
+            '    if a < b { print("1"); } else { print("0"); }\n'
+            '    if a <= b { print("1"); } else { print("0"); }\n'
+            '    if a > b { print("1"); } else { print("0"); }\n'
+            '    if a >= b { println("1"); } else { println("0"); }\n'
             '}'
         )
         image = compile_native_subset(source)
@@ -214,19 +214,19 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'011100\\n')
+        self.assertEqual(result.stdout, b'011100\n')
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
     def test_native_if_else_if_nesting_and_no_else(self):
         source = (
-            'fn main() {\\n'
-            '    let value: i32 = 7;\\n'
-            '    if value < 0 { println("negative"); } else if value == 7 {\\n'
-            '        println("seven");\\n'
-            '    } else { println("other"); }\\n'
-            '    if value > 100 { println("unreachable"); }\\n'
-            '    println("done");\\n'
+            'fn main() {\n'
+            '    let value: i32 = 7;\n'
+            '    if value < 0 { println("negative"); } else if value == 7 {\n'
+            '        println("seven");\n'
+            '    } else { println("other"); }\n'
+            '    if value > 100 { println("unreachable"); }\n'
+            '    println("done");\n'
             '}'
         )
         image = compile_native_subset(source)
@@ -237,7 +237,7 @@ class NativeX8664Tests(unittest.TestCase):
             os.chmod(path, 0o755)
             result = subprocess.run([path], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'seven\\ndone\\n')
+        self.assertEqual(result.stdout, b'seven\ndone\n')
 
     def test_native_if_rejects_non_i32_and_non_comparison_conditions(self):
         unsupported = [
