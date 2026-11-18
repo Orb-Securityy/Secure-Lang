@@ -1884,6 +1884,8 @@ class Compiler:
         if a.k == "Var":
             v = self.lookup(a.name)
             if v is None and a.name in self.consts and self.consts[a.name][0].k == "str":
+                if wantmut and not self.unsafe_depth:
+                    self.err("cannot mutably borrow an immutable string constant", a)
                 c, t = self.expr(a, None)
                 return self.ref_coerce(Place(c, STR, False), pt, a)
             if v is not None and v.ty.k == "ref":
