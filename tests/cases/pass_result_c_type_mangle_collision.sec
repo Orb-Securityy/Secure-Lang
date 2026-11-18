@@ -14,13 +14,19 @@ fn second_result() -> Result<A_T_B, C> {
 fn main() -> i32 {
     let first = first_result();
     let second = second_result();
-    match second {
-        Ok(value) => { if value.x != 2 { return 3; } },
-        Err(_) => { return 4; },
+    let first_valid = match first {
+        Ok(value) => value.x == 1,
+        Err(_) => false,
+    };
+    let second_valid = match second {
+        Ok(value) => value.x == 2,
+        Err(_) => false,
+    };
+    if !first_valid {
+        return 1;
     }
-    match first {
-        Ok(value) => { if value.x != 1 { return 1; } },
-        Err(_) => { return 2; },
+    if !second_valid {
+        return 2;
     }
     return 0;
 }
