@@ -13,13 +13,13 @@ import atheris
 with atheris.instrument_imports():
     import struct
     from securec.ir import (
-        IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit,
+        MAX_OUTPUT, IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit,
         IRFunction, IRJump, IRLabel, IRLocalI32, IRParamI32, IRPrintI32,
         IRProgram, IRReturnI32, IRStoreI32, IRUnaryI32, IRValue, IRWrite,
     )
     from securec.lexer import SecError
     from securec.native_lower import compile_native_subset
-    from securec.native_x86_64 import emit_native
+    from securec.native_x86_64 import CODE_OFFSET, MAX_NATIVE_CODE, emit_native
 
 MAX_INPUT_BYTES = 16 * 1024
 MAX_IR_INSTRUCTIONS = 24
@@ -105,6 +105,7 @@ def _validate_elf(image: bytes) -> None:
         raise AssertionError("native ELF entrypoint is not the backend entry offset")
 
     code_found = False
+    code_segment_filesz = 0
     data_found = False
     stack_found = False
     for index in range(phnum):
@@ -118,19 +119,22 @@ def _validate_elf(image: bytes) -> None:
             if offset == 0:
                 if code_found or flags != 5 or vaddr != 0 or paddr != 0:
                     raise AssertionError("native ELF code segment is not exactly RX")
-                if filesz != memsz or filesz <= 0x1000:
+                if filesz != memsz or not CODE_OFFSET < filesz <= CODE_OFFSET + MAX_NATIVE_CODE:
                     raise AssertionError("native ELF code segment has invalid size")
                 if not vaddr <= entry < vaddr + memsz:
                     raise AssertionError("native ELF entrypoint is outside RX code")
                 code_found = True
-            elif offset == 0x2000:
-                if data_found or flags != 4 or vaddr != 0x2000 or paddr != 0x2000:
-                    raise AssertionError("native ELF data segment is not exactly R-only")
-                if not filesz or filesz != memsz:
+                code_segment_filesz = filesz
+            elif code_found:
+                expected_data_offset = (code_segment_filesz + 0xFFF) & ~0xFFF
+                if (data_found or offset != expected_data_offset or flags != 4
+                        or vaddr != expected_data_offset or paddr != expected_data_offset):
+                    raise AssertionError("native ELF data segment is not exactly R-only after code")
+                if not filesz or filesz != memsz or filesz > MAX_OUTPUT:
                     raise AssertionError("native ELF read-only data segment has invalid size")
-                if not code_found:
-                    raise AssertionError("native ELF data precedes its code segment")
                 data_found = True
+            else:
+                raise AssertionError("native ELF contains a data segment before code")
             else:
                 raise AssertionError("native ELF contains an unexpected load segment")
         elif kind == 0x6474E551:
@@ -178,7 +182,8 @@ def test_one_input(data: bytes) -> None:
             image = compile_native_subset(source)
         except (SecError, ValueError, OverflowError):
             return
-        if len(image) > 0x2000 + (1 << 20) + 4096:
+        max_data_offset = (CODE_OFFSET + MAX_NATIVE_CODE + 0xFFF) & ~0xFFF
+        if len(image) > max_data_offset + MAX_OUTPUT:
             raise AssertionError("native compiler emitted an oversized image")
         _validate_elf(image)
     else:
