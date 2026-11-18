@@ -1,0 +1,7 @@
+// EXPECT-OUT: 7
+fn make() -> Result<i32, i32> { Ok(7) }
+fn main() -> i32 {
+    let value = make();
+    println(value.unwrap());
+    return 0;
+}
