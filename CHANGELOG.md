@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — target ABI contract
+
+- Enforce the 64-bit `usize`/pointer model and the scalar/`pthread_t` alignment assumptions used by conservative stack-size accounting.
+- Fail compilation on unsupported target ABIs instead of silently compiling with mismatched size/range assumptions.
+
 ## 0.1.21 — call ordering and backend arithmetic hardening
 
 - Enforce the documented three-phase call argument order: evaluate by-value arguments, evaluate every reference-place expression, then form borrowed pointers.
