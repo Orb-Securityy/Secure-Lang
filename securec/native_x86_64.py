@@ -5,7 +5,7 @@ assembler, linker, or C runtime. It consumes only the shared immutable IR contra
 """
 import struct
 
-from .ir import (IRBinaryI32, IRCompareBranch, IRConstI32, IRExit, IRJump, IRLabel, IRPrintI32, IRUnaryI32,
+from .ir import (IRBinaryI32, IRCompareBranch, IRConstI32, IRExit, IRJump, IRLabel, IRLocalI32, IRPrintI32, IRStoreI32, IRUnaryI32,
                  IRValue, IRWrite, MAX_OUTPUT, verify_ir)
 
 
@@ -177,7 +177,7 @@ def _emit_program_code(ir):
     needs_write_helper = False
     label_offsets = {}
     control_fixups = []
-    slot_count = sum(type(ins) in (IRConstI32, IRUnaryI32, IRBinaryI32) for ins in ir.instructions)
+    slot_count = sum(type(ins) in (IRConstI32, IRLocalI32, IRUnaryI32, IRBinaryI32) for ins in ir.instructions)
     needs_stack_buffer = any(type(ins) is IRPrintI32 for ins in ir.instructions)
     frame_size = 0
     if slot_count or needs_stack_buffer:
@@ -192,6 +192,12 @@ def _emit_program_code(ir):
             code.extend(bytes.fromhex("c78424"))
             code.extend(struct.pack("<I", _slot_disp(instruction.dest)))
             code.extend(struct.pack("<i", instruction.value))
+        elif type(instruction) is IRLocalI32:
+            _emit_load_eax(code, instruction.initial.slot)
+            _emit_store_eax(code, instruction.dest)
+        elif type(instruction) is IRStoreI32:
+            _emit_load_eax(code, instruction.value.slot)
+            _emit_store_eax(code, instruction.dest)
         elif type(instruction) in (IRUnaryI32, IRBinaryI32):
             _emit_checked_arithmetic(code, instruction, trap_fixups)
         elif type(instruction) is IRWrite:
