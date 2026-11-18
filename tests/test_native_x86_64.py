@@ -209,14 +209,14 @@ class NativeX8664Tests(unittest.TestCase):
         for a, b in pairs:
             quotient = trunc_div(a, b)
             remainder = a - quotient * b
-            expected.append(f"{a + b},{a - b},{a * b},{quotient},{remainder}\\n")
+            expected.append(f"{a + b},{a - b},{a * b},{quotient},{remainder}\n")
             calls.append(f"    evaluate({a}, {b});")
         source = (
-            'fn evaluate(a: i32, b: i32) -> i32 {\\n'
-            '    println(a + b, ",", a - b, ",", a * b, ",", a / b, ",", a % b);\\n'
-            '    return 0;\\n'
-            '}\\n'
-            'fn main() {\\n' + "\\n".join(calls) + '\\n}'
+            'fn evaluate(a: i32, b: i32) -> i32 {\n'
+            '    println(a + b, ",", a - b, ",", a * b, ",", a / b, ",", a % b);\n'
+            '    return 0;\n'
+            '}\n'
+            'fn main() {\n' + "\n".join(calls) + '\n}'
         )
         image = compile_native_subset(source)
         with tempfile.TemporaryDirectory() as directory:
