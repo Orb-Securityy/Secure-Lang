@@ -27,7 +27,9 @@ python3 bench/run_bench.py          # performance vs unchecked C
 ```
 
 Experimental bootstrap command: `bin/securec native-build examples/native_hello.sec -o hello`.
-`native-build` is an experimental bootstrap path: it accepts `str` constants, immutable `str` bindings, and `print`/`println` calls whose arguments resolve to static strings. Those forms lower to a verified immutable IR, then a static x86-64 Linux ELF. The generated code uses Linux syscalls directly and retries interrupted or partial writes. The path does not invoke GCC, an assembler, a linker, or libc. The parser/driver are still Python; this restricted path is **not** the normal compiler or a self-hosted release.
+
+Integer example: `bin/securec native-build examples/native_i32.sec -o answer`.
+`native-build` is an experimental bootstrap path: it accepts `str` constants, immutable `str` bindings, `i32` constants and immutable `i32` bindings, plus compile-time checked `i32` arithmetic (`+`, `-`, `*`, `/`, `%`). `print`/`println` arguments must resolve to static strings or compile-time `i32` values. These forms lower to a verified immutable IR, then a static x86-64 Linux ELF. The generated code uses Linux syscalls directly and retries interrupted or partial writes. Arithmetic is currently evaluated during compilation; runtime arithmetic and input are not yet supported. The path does not invoke GCC, an assembler, a linker, or libc. The parser/driver are still Python; this restricted path is **not** the normal compiler or a self-hosted release.
 
 ```
 enum Error { Overflow }
