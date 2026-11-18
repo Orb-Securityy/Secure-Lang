@@ -224,8 +224,11 @@ def lower_to_ir(items):
             _error(f"native functions support at most {MAX_NATIVE_ARGS} i32 parameters (first six in registers, remaining on stack)", function)
         seen_params = set()
         for parameter in function.params:
-            if parameter.name in seen_params or not _is_i32_type(parameter.ty):
-                _error("native function parameters must have unique names and type i32", parameter)
+            if (parameter.name in seen_params or parameter.name in constants
+                    or parameter.name in raw_functions
+                    or parameter.name in ("print", "println")
+                    or not _is_i32_type(parameter.ty)):
+                _error("native function parameters must have unique, unreserved names and type i32", parameter)
             seen_params.add(parameter.name)
         function_signatures[name] = len(function.params)
 
