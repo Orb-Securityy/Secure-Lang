@@ -9,8 +9,9 @@ import unittest
 from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
-from securec.ir import (MAX_OUTPUT, IRBinaryI32, IRConstI32, IRExit, IRPrintI32,
-                        IRProgram, IRUnaryI32, IRValue, IRWrite, verify_ir)
+from securec.ir import (MAX_OUTPUT, IRBinaryI32, IRCompareBranch, IRConstI32,
+                        IRExit, IRJump, IRLabel, IRPrintI32, IRProgram, IRUnaryI32,
+                        IRValue, IRWrite, verify_ir)
 from securec.native_lower import compile_native_subset, lower_to_ir
 from securec.native_x86_64 import emit_native
 
@@ -190,6 +191,86 @@ class NativeX8664Tests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
                          ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_if_else_executes_all_signed_comparisons(self):
+        source = (
+            'fn main() {\\n'
+            '    let a: i32 = 4;\\n'
+            '    let b: i32 = 9;\\n'
+            '    if a == b { print("1"); } else { print("0"); }\\n'
+            '    if a != b { print("1"); } else { print("0"); }\\n'
+            '    if a < b { print("1"); } else { print("0"); }\\n'
+            '    if a <= b { print("1"); } else { print("0"); }\\n'
+            '    if a > b { print("1"); } else { print("0"); }\\n'
+            '    if a >= b { println("1"); } else { println("0"); }\\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'native-conditions')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'011100\\n')
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and platform.machine().lower() in
+                         ('x86_64', 'amd64'), 'requires x86-64 Linux execution')
+    def test_native_if_else_if_nesting_and_no_else(self):
+        source = (
+            'fn main() {\\n'
+            '    let value: i32 = 7;\\n'
+            '    if value < 0 { println("negative"); } else if value == 7 {\\n'
+            '        println("seven");\\n'
+            '    } else { println("other"); }\\n'
+            '    if value > 100 { println("unreachable"); }\\n'
+            '    println("done");\\n'
+            '}'
+        )
+        image = compile_native_subset(source)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'nested-conditions')
+            with open(path, 'xb') as executable:
+                executable.write(image)
+            os.chmod(path, 0o755)
+            result = subprocess.run([path], capture_output=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, b'seven\\ndone\\n')
+
+    def test_native_if_rejects_non_i32_and_non_comparison_conditions(self):
+        unsupported = [
+            'fn main() { if true { println("bad"); } }',
+            'fn main() { if "x" == "x" { println("bad"); } }',
+            'fn main() { if 1 { println("bad"); } }',
+            'fn main() { let a: i32 = 1; if a + 1 { println("bad"); } }',
+            'fn main() { let a: i32 = 1; if a == 1 { let b: i32 = 2; } println(b); }',
+        ]
+        for source in unsupported:
+            with self.subTest(source=source):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
+
+    def test_native_ir_verifier_rejects_undefined_labels_and_branch_only_slots(self):
+        missing_label = IRProgram((IRConstI32(0, 1), IRCompareBranch(
+            IRValue(0), '<', IRValue(0), 1, 99), IRLabel(1), IRExit(0)))
+        branch_only_slot = IRProgram((
+            IRConstI32(0, 0),
+            IRConstI32(1, 1),
+            IRCompareBranch(IRValue(0), '<', IRValue(1), 1, 2),
+            IRLabel(1),
+            IRConstI32(2, 5),
+            IRJump(3),
+            IRLabel(2),
+            IRLabel(3),
+            IRPrintI32(IRValue(2), False),
+            IRExit(0),
+        ))
+        for ir in (missing_label, branch_only_slot):
+            with self.subTest(ir=ir):
+                with self.assertRaises(ValueError):
+                    verify_ir(ir)
     def test_native_runtime_i32_overflow_and_division_trap_with_101(self):
         programs = [
             'fn main() { let a: i32 = 2147483647; let b: i32 = 1; println(a + b); }',
