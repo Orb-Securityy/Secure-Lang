@@ -794,7 +794,7 @@ class NativeX8664Tests(unittest.TestCase):
             compile_native_subset(declarations + "fn main() {}")
 
     def test_native_lowering_stops_at_instruction_budget(self):
-        statements = "    println(\\"x\\");\n" * (MAX_NATIVE_INSTRUCTIONS // 2 + 1)
+        statements = "    println(\"x\");\n" * (MAX_NATIVE_INSTRUCTIONS // 2 + 1)
         source = "fn main() {\n" + statements + "}"
         with self.assertRaises(SecError):
             compile_native_subset(source)
