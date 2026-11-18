@@ -1,5 +1,7 @@
 # Auditing a closed-source toolchain
 
+> **Repository distribution warning (checked 2026-11-18):** the GitHub repository containing this file is currently public and includes the compiler implementation under securec/. That conflicts with the closed-source distribution rule described below. This document does not enforce access control. Before a release, the owner must explicitly choose either (a) a private repository and distribution process, including review of branches, tags, forks and previously cloned copies, or (b) a source-available proprietary distribution with explicit licensing and redistribution terms. Until that decision is made, do not describe the compiler source as unpublished or confidential.
+
 Secure's implementation is proprietary and **must not be published**. Independent audit is still possible
 because everything an auditor needs about a *program* is derivable without the compiler's source:
 
