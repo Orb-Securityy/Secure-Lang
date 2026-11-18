@@ -114,8 +114,8 @@ def lower_to_ir(items):
         if stmt.k == "Let":
             if stmt.mut:
                 _error("native subset accepts only immutable `let` bindings", stmt)
-            if stmt.name in bindings or stmt.name in constants:
-                _error(f"duplicate or shadowed native binding `{stmt.name}`", stmt)
+            if stmt.name in bindings or stmt.name in constants or stmt.name in ("print", "println"):
+                _error(f"duplicate, reserved, or shadowed native binding `{stmt.name}`", stmt)
             value = _resolve_static_value(stmt.init, bindings, constants)
             if stmt.ty is not None and _declared_kind(stmt.ty, stmt) != value[0]:
                 _error("native binding type does not match its initializer", stmt)
