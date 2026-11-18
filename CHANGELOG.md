@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — defined signed right shift
+
+- Implement signed arithmetic right shift with unsigned sign-fill and the existing range-safe decoder instead of C's implementation-defined signed right shift.
+- Add exhaustive i8/i16 and boundary-focused i32/i64/unsigned property tests under UBSan, plus a language-level regression.
+
 ## 0.1.22 — ABI, conversion, and ownership hardening
 
 - Enforce the target ABI assumed by the compiler: 8-bit bytes, exact integer widths, 1-byte bool, 8-byte f64, full-range 64-bit usize/pointers, scalar alignment limits, and pthread layout bounds.
