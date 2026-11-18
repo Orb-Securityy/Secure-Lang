@@ -5,7 +5,7 @@ assembler, linker, or C runtime. It consumes only the shared immutable IR contra
 """
 import struct
 
-from .ir import (IRBinaryI32, IRConstI32, IRExit, IRPrintI32, IRUnaryI32,
+from .ir import (IRBinaryI32, IRBranchI32, IRConstI32, IRExit, IRJump, IRLabel, IRPrintI32, IRUnaryI32,
                  IRValue, IRWrite, MAX_OUTPUT, verify_ir)
 
 
@@ -175,6 +175,8 @@ def _emit_program_code(ir):
     lea_fixups = []
     trap_fixups = []
     needs_write_helper = False
+    label_offsets = {}
+    control_fixups = []
     slot_count = sum(type(ins) in (IRConstI32, IRUnaryI32, IRBinaryI32) for ins in ir.instructions)
     needs_stack_buffer = any(type(ins) is IRPrintI32 for ins in ir.instructions)
     frame_size = 0
@@ -208,6 +210,26 @@ def _emit_program_code(ir):
         elif type(instruction) is IRPrintI32:
             _emit_i32_formatter(code, instruction.value, instruction.newline, call_fixups)
             needs_write_helper = True
+        elif type(instruction) is IRBranchI32:
+            _emit_load_eax(code, instruction.left.slot)
+            _emit_load_ecx(code, instruction.right.slot)
+            code.extend(bytes.fromhex("39c8"))  # cmp eax, ecx
+            condition_codes = {"==": 0x84, "!=": 0x85, "<": 0x8C,
+                               "<=": 0x8E, ">": 0x8F, ">=": 0x8D}
+            branch_fixups = []
+            _emit_jcc32(code, condition_codes[instruction.op], branch_fixups)
+            control_fixups.append((branch_fixups[0], instruction.if_true))
+            jump_fixups = []
+            _emit_jmp32(code, jump_fixups)
+            control_fixups.append((jump_fixups[0], instruction.if_false))
+        elif type(instruction) is IRJump:
+            jump_fixups = []
+            _emit_jmp32(code, jump_fixups)
+            control_fixups.append((jump_fixups[0], instruction.target))
+        elif type(instruction) is IRLabel:
+            if instruction.label in label_offsets:
+                raise ValueError("duplicate native code label")
+            label_offsets[instruction.label] = len(code)
         elif type(instruction) is IRExit:
             continue  # verify_ir requires this to be the final instruction
         else:
@@ -244,6 +266,11 @@ def _emit_program_code(ir):
         code.extend(bytes.fromhex("b83c000000bf650000000f05"))  # exit(101)
         for position in trap_fixups:
             _patch_rel32(code, position, panic_label)
+
+    for position, target_label in control_fixups:
+        if target_label not in label_offsets:
+            raise ValueError("native branch targets an unknown code label")
+        _patch_rel32(code, position, label_offsets[target_label])
 
     for position, data_offset in lea_fixups:
         target = ELF_BASE + DATA_OFFSET + data_offset
