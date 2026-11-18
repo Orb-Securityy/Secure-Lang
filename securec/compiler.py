@@ -59,6 +59,7 @@ class Tmp:
 class Loop:
     def __init__(self, depth, level):
         self.depth, self.level, self.breaks, self.conts = depth, level, [], []
+        self.result_breaks, self.result_conts = [], []
 
 
 def c_int(v, name):
@@ -87,6 +88,7 @@ class Compiler:
         self.audit = {"unsafe_blocks": [], "unsafe_fns": [], "extern_fns": []}
         self.uid = 0
         self.out, self.scopes, self.moved, self.loops, self.stmt_temps = [], [], set(), [], []
+        self.unused_results = set()
         self.fn_ret, self.cur_self, self.unsafe_depth, self.pre = UNIT, None, 0, {}
 
     # ------------------------------------------------------------------ utils
@@ -726,6 +728,8 @@ class Compiler:
         if self.needs_drop(ty):
             v.flag = f"l_{name}_{i}"
         self.scopes[-1].append(v)
+        if ty.k == "result":
+            self.unused_results.add(v)
         return v
 
     def decl_var(self, v, init):
@@ -798,10 +802,34 @@ class Compiler:
             r |= s
         return r
 
+    @staticmethod
+    def merge_pending_results(*states):
+        merged = set()
+        for state in states:
+            if state is not None:
+                merged.update(state)
+        return merged
+
+    def check_unhandled_results(self, scopes, n):
+        for scope in reversed(scopes):
+            for var in reversed(scope):
+                if var in self.unused_results:
+                    self.err(
+                        f"unused `Result` binding `{var.name}`; handle it with `match`, `?`, `unwrap()` or `unwrap_or()`",
+                        n,
+                    )
+
+    def mark_result_handled(self, place):
+        if place.k == "Var":
+            var = self.lookup(place.name)
+            if var is not None and var.ty.k == "result":
+                self.unused_results.discard(var)
+
     # --------------------------------------------------------------- functions
     def compile_fn(self, sig):
         n = sig.node
         self.out, self.scopes, self.moved, self.loops, self.stmt_temps = [], [[]], set(), [], []
+        self.unused_results = set()
         self.fn_ret, self.cur_self, self.unsafe_depth = sig.ret, sig.selfty, (1 if sig.unsafe else 0)
         names = []
         for pn, pm, pt in sig.params:
@@ -816,6 +844,7 @@ class Compiler:
             where = n.body.tail or n.body
             self.err(f"mismatched types: function `{sig.name}` must return `{tstr(ret)}` on every path, "
                      f"but its body has type `{tstr(bt)}`", where)
+        self.check_unhandled_results([self.scopes[0]], n)
         self.emit("{")
         self.out.extend(lines)
         self.emit("}")
@@ -857,6 +886,7 @@ class Compiler:
             if self.needs_drop(tt):
                 self.take_temp(tc)
         self.drop_temps(mark)
+        self.check_unhandled_results([self.scopes[-1]], n)
         if self.moved is not None:
             self.drop_scope(self.scopes[-1])
         self.pop()
@@ -1124,7 +1154,10 @@ class Compiler:
                 if self.moved is not None and v in self.moved:
                     self.err(f"use of moved value `{nm}`", n)
                 return v.c, v.ty
-            return self.consume(self.place(n), n)
+            value, ty = self.consume(self.place(n), n)
+            if v.ty.k == "result":
+                self.unused_results.discard(v)
+            return value, ty
         if nm in self.consts:
             ty, val = self.consts[nm]
             if ty.k == "int": return c_int(val, ty.name), ty
@@ -1319,6 +1352,8 @@ class Compiler:
         if v is not None:
             if v.ty.k == "ref":
                 self.err(f"cannot assign to the reference parameter `{v.name}` itself; use `*{v.name} = ...`", tgt)
+            if v.ty.k == "result" and v in self.unused_results:
+                self.err(f"cannot overwrite unhandled `Result` binding `{v.name}`", tgt)
             if not v.mut:
                 self.err(f"cannot assign to immutable variable `{v.name}` (declare it with `let mut`)", tgt)
             lv, ty = v.c, v.ty
@@ -1334,6 +1369,8 @@ class Compiler:
                     self.emit(f"{v.flag} = true;")
                     if self.moved is not None:
                         self.moved.discard(v)
+                if v.ty.k == "result":
+                    self.unused_results.add(v)
                 return "SEC_UNIT", UNIT
             if self.moved is not None and v in self.moved:
                 self.err(f"use of moved value `{v.name}`", tgt)
