@@ -1,0 +1,25 @@
+// EXPECT-OUT: -128 127 -128 -32768 32767 -32768
+// EXPECT-OUT: -2147483648 2147483647 -2147483648 -9223372036854775808 9223372036854775807 -9223372036854775808
+fn add_i8(a: i8, b: i8) -> i8 { wrapping_add(a, b) }
+fn sub_i8(a: i8, b: i8) -> i8 { wrapping_sub(a, b) }
+fn mul_i8(a: i8, b: i8) -> i8 { wrapping_mul(a, b) }
+fn add_i16(a: i16, b: i16) -> i16 { wrapping_add(a, b) }
+fn sub_i16(a: i16, b: i16) -> i16 { wrapping_sub(a, b) }
+fn mul_i16(a: i16, b: i16) -> i16 { wrapping_mul(a, b) }
+fn add_i32(a: i32, b: i32) -> i32 { wrapping_add(a, b) }
+fn sub_i32(a: i32, b: i32) -> i32 { wrapping_sub(a, b) }
+fn mul_i32(a: i32, b: i32) -> i32 { wrapping_mul(a, b) }
+fn add_i64(a: i64, b: i64) -> i64 { wrapping_add(a, b) }
+fn sub_i64(a: i64, b: i64) -> i64 { wrapping_sub(a, b) }
+fn mul_i64(a: i64, b: i64) -> i64 { wrapping_mul(a, b) }
+fn main() -> i32 {
+    println(
+        add_i8(127i8, 1i8), " ", sub_i8(-128i8, 1i8), " ", mul_i8(-128i8, -1i8), " ",
+        add_i16(32767i16, 1i16), " ", sub_i16(-32768i16, 1i16), " ", mul_i16(-32768i16, -1i16)
+    );
+    println(
+        add_i32(2147483647i32, 1i32), " ", sub_i32(-2147483648i32, 1i32), " ", mul_i32(-2147483648i32, -1i32), " ",
+        add_i64(9223372036854775807i64, 1i64), " ", sub_i64(-9223372036854775808i64, 1i64), " ", mul_i64(-9223372036854775808i64, -1i64)
+    );
+    return 0;
+}
