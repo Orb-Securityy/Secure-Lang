@@ -934,7 +934,7 @@ class NativeX8664Tests(unittest.TestCase):
                         self.assertEqual(main(['native-build', source, '-o', output]), 0)
             result = subprocess.run([output], capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b'no external compiler\\n')
+        self.assertEqual(result.stdout, b'no external compiler\n')
 
     def test_native_build_rejects_c_compiler_flags_and_program_args(self):
         with self.assertRaises(SystemExit):
