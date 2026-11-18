@@ -17,7 +17,7 @@ from securec.ir import (MAX_OUTPUT, MAX_NATIVE_CONSTANTS, MAX_NATIVE_FUNCTIONS,
                         IRProgram, IRReturnI32, IRStoreI32, IRUnaryI32, IRValue,
                         IRWrite, verify_ir)
 from securec.native_lower import MAX_NATIVE_SOURCE, compile_native_subset, lower_to_ir
-from securec.native_x86_64 import emit_native
+from securec.native_x86_64 import MAX_NATIVE_CODE, _write_elf64, emit_native
 
 
 class NativeX8664Tests(unittest.TestCase):
@@ -50,6 +50,13 @@ class NativeX8664Tests(unittest.TestCase):
         self.assertGreater(rodata[5], 0)
         self.assertEqual(stack[1], 6)   # PF_R | PF_W, never executable
         self.assertTrue(all(not (h[1] & 2 and h[1] & 1) for h in loads))
+
+    def test_native_elf_writer_rejects_code_overflow_and_bad_data_offset(self):
+        oversized_code = b"\\x90" * (MAX_NATIVE_CODE + 1)
+        with self.assertRaises(ValueError):
+            _write_elf64(oversized_code, b"", 0x102000)
+        with self.assertRaises(ValueError):
+            _write_elf64(b"\\x90", b"data", 0x3000)
 
     def test_native_elf_segments_are_bounded_aligned_and_non_writable_executable(self):
         image = compile_native_subset('fn main() { println("ELF audit"); }')
