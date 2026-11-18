@@ -627,13 +627,15 @@ class Compiler:
                 fields.append((fname, self.storable(self.rty(tn, struct(name)), tn)))
             info["fields"] = fields
         self.resolving_struct_fields = False
+        # Diagnose illegal by-value recursion before the Result aggregate
+        # restriction, preserving the primary recursive-layout diagnostic.
+        self.check_cycles()
         # Reject Result fields, including Results hidden inside another user
         # struct, rather than losing their must-use obligation at aggregate drop.
         for name, info in self.structs.items():
             for fname, field_ty in info["fields"]:
                 if self.contains_result(field_ty):
                     self.err(f"struct field {name}.{fname} cannot contain a Result; keep it as a direct binding", info["node"])
-        self.check_cycles()
         # Array limits are checked only after every user struct has a resolved
         # layout. That lets a legal Vec-indirected recursive array element refer
         # to an in-progress struct without leaking a TypeError from tsize().
