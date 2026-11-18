@@ -2,7 +2,7 @@
 fn main() -> i32 {
     let value: Result<i32, i32> = Ok(1);
     while false {
-        println(value.unwrap());
+        println(value.is_ok());
     }
     return 0;
 }
