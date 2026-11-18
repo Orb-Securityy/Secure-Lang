@@ -1,5 +1,7 @@
 import contextlib
+import hashlib
 import io
+import json
 import os
 import subprocess
 import tempfile
@@ -49,6 +51,21 @@ class DriverInputTests(unittest.TestCase):
             self.assertIn("is not valid UTF-8", stderr.getvalue())
             self.assertNotIn("Traceback", stderr.getvalue())
 
+
+    def test_audit_hashes_exact_source_bytes_before_newline_normalization(self):
+        source_bytes = b"fn main() -> i32 {\r\n    return 0;\r}\n"
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "mixed-newlines.sec")
+            with open(path, "wb") as stream:
+                stream.write(source_bytes)
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                result = main(["audit", path])
+
+            self.assertEqual(result, 0)
+            report = json.loads(stdout.getvalue())
+            self.assertEqual(report["sha256"], hashlib.sha256(source_bytes).hexdigest())
 
     def test_deeply_nested_source_is_reported_without_traceback(self):
         nested = "(" * 1200 + "0" + ")" * 1200
