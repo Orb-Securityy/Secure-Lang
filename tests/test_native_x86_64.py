@@ -10,11 +10,12 @@ from unittest.mock import patch
 from securec.lexer import SecError
 from securec.parser import parse
 from securec.driver import main
-from securec.ir import (MAX_OUTPUT, IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32,
-                        IRExit, IRFunction, IRJump, IRLabel, IRLocalI32, IRParamI32,
-                        IRPrintI32, IRProgram, IRReturnI32, IRStoreI32, IRUnaryI32,
-                        IRValue, IRWrite, verify_ir)
-from securec.native_lower import compile_native_subset, lower_to_ir
+from securec.ir import (MAX_OUTPUT, MAX_NATIVE_FUNCTIONS, MAX_NATIVE_INSTRUCTIONS,
+                        IRBinaryI32, IRCallI32, IRCompareBranch, IRConstI32, IRExit,
+                        IRFunction, IRJump, IRLabel, IRLocalI32, IRParamI32, IRPrintI32,
+                        IRProgram, IRReturnI32, IRStoreI32, IRUnaryI32, IRValue,
+                        IRWrite, verify_ir)
+from securec.native_lower import MAX_NATIVE_SOURCE, compile_native_subset, lower_to_ir
 from securec.native_x86_64 import emit_native
 
 
@@ -735,6 +736,36 @@ class NativeX8664Tests(unittest.TestCase):
                     os.chmod(path, 0o755)
                     result = subprocess.run([path], capture_output=True, check=False)
                     self.assertEqual(result.returncode, 101, result.stderr)
+
+    def test_native_compiler_rejects_sources_over_its_api_byte_limit(self):
+        oversized_chars = " " * (MAX_NATIVE_SOURCE + 1)
+        oversized_utf8 = "é" * (MAX_NATIVE_SOURCE // 2 + 1)
+        for source in (oversized_chars, oversized_utf8, "\ud800", None):
+            with self.subTest(source_type=type(source).__name__):
+                with self.assertRaises(SecError):
+                    compile_native_subset(source)
+
+    def test_native_ir_rejects_excessive_function_and_instruction_counts(self):
+        too_many_functions = tuple(
+            IRFunction(f"f{i}", 0, (IRReturnI32(IRValue(0)),))
+            for i in range(MAX_NATIVE_FUNCTIONS + 1)
+        )
+        with self.assertRaises(ValueError):
+            verify_ir(IRProgram((IRExit(0),), too_many_functions))
+
+        too_many_entry_instructions = (
+            (IRWrite(b"", False),) * MAX_NATIVE_INSTRUCTIONS + (IRExit(0),)
+        )
+        with self.assertRaises(ValueError):
+            verify_ir(IRProgram(too_many_entry_instructions))
+
+        oversized_function = IRFunction(
+            "large",
+            0,
+            (IRReturnI32(IRValue(0)),) * MAX_NATIVE_INSTRUCTIONS,
+        )
+        with self.assertRaises(ValueError):
+            verify_ir(IRProgram((IRExit(0),), (oversized_function,)))
 
     def test_native_ir_verifier_rejects_malformed_function_contracts(self):
         valid_fn = IRFunction(
