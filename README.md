@@ -24,9 +24,10 @@ python3 tests/run_tests.py          # conformance: normal + ASan/UBSan/LSan
 python3 -m unittest discover -s tests -p 'test_*.py'  # compiler/driver properties
 python3 tests/run_analyzer.py       # GCC -fanalyzer on generated C
 python tests/fuzz_frontend.py -atheris_runs=30000  # optional Atheris campaign
+python3 bench/run_bench.py          # performance vs unchecked C
+```
 
 `native-build` is an experimental bootstrap path: it accepts only a `main` function containing string-literal `println` statements and writes a static x86-64 Linux ELF directly. It does not invoke GCC, an assembler, or a linker. The driver/frontend is still Python, and this restricted path is **not** the normal compiler or a self-hosted release.
-python3 bench/run_bench.py          # performance vs unchecked C
 ```
 
 ```
