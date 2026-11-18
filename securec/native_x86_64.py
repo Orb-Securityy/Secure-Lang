@@ -11,6 +11,7 @@ from .parser import parse
 
 ELF_BASE = 0x400000
 CODE_OFFSET = 0x1000
+DATA_OFFSET = 0x2000
 MAX_OUTPUT = 1 << 20
 
 
@@ -49,7 +50,7 @@ def _machine_code(data_length):
     code += bytes.fromhex('bf01000000')       # mov edi, 1 (stdout)
     code += bytes.fromhex('488d35')            # lea rsi, [rip + disp32]
     lea_next_ip_offset = len(code) + 4
-    data_offset = CODE_OFFSET + 50
+    data_offset = DATA_OFFSET
     displacement = data_offset - (CODE_OFFSET + lea_next_ip_offset)
     code += struct.pack('<i', displacement)
     code += b'\xba' + struct.pack('<I', data_length)  # mov edx, len
@@ -71,8 +72,24 @@ def build_elf64(data):
     code = _machine_code(len(data))
     if len(code) > 0x1000:
         raise ValueError("native code exceeds the first backend page")
-    image_size = CODE_OFFSET + len(code) + len(data)
+    code_segment_size = CODE_OFFSET + len(code)
     ident = b'\x7fELF' + bytes((2, 1, 1, 0, 0)) + bytes(7)
+    program_headers = [
+        struct.pack(
+            '<IIQQQQQQ',
+            1, 5, 0, ELF_BASE, ELF_BASE, code_segment_size, code_segment_size, 0x1000,
+        ),
+    ]
+    if data:
+        program_headers.append(struct.pack(
+            '<IIQQQQQQ',
+            1, 4, DATA_OFFSET, ELF_BASE + DATA_OFFSET, ELF_BASE + DATA_OFFSET,
+            len(data), len(data), 0x1000,
+        ))
+    program_headers.append(struct.pack(
+        '<IIQQQQQQ',
+        0x6474E551, 6, 0, 0, 0, 0, 0, 16,
+    ))
     ehdr = ident + struct.pack(
         '<HHIQQQIHHHHHH',
         2,                 # ET_EXEC
@@ -80,25 +97,22 @@ def build_elf64(data):
         1,                 # EV_CURRENT
         ELF_BASE + CODE_OFFSET,
         64,                # e_phoff
-        0,                 # e_shoff (no section table needed by the loader)
+        0,                 # e_shoff
         0,                 # e_flags
         64,                # e_ehsize
         56,                # e_phentsize
-        2,                 # e_phnum
+        len(program_headers),
         64, 0, 0,
     )
-    load = struct.pack(
-        '<IIQQQQQQ',
-        1, 5, 0, ELF_BASE, ELF_BASE, image_size, image_size, 0x1000,
-    )
-    stack = struct.pack(
-        '<IIQQQQQQ',
-        0x6474E551, 6, 0, 0, 0, 0, 0, 16,
-    )
-    header = ehdr + load + stack
+    header = ehdr + b''.join(program_headers)
     if len(header) > CODE_OFFSET:
         raise AssertionError("ELF headers exceed code offset")
-    return header + bytes(CODE_OFFSET - len(header)) + code + data
+    image = header + bytes(CODE_OFFSET - len(header)) + code
+    if data:
+        if len(image) > DATA_OFFSET:
+            raise AssertionError("native code overlaps read-only data segment")
+        image += bytes(DATA_OFFSET - len(image)) + data
+    return image
 
 
 def compile_native_subset(source):
