@@ -74,4 +74,4 @@ and mechanizing the ownership/borrow rules are roadmap items.
 4. Std: files, sockets, TLS/crypto bindings behind capability-typed handles; `Secret<T>` with zeroize-on-drop.
 5. Package manager: lockfiles with content hashes, signed registry, reproducible builds, `--forbid-unsafe` per dependency.
 6. Mutex/channel/atomic types with `Send`/`Sync`-style checking; scoped threads.
-7. Native backend (LLVM or own) and self-hosting to shrink the TCB.
+7. Implement the repository-owned x86-64 native backend and self-hosting compiler; remove Python, C, GCC/LLVM, assembler, linker, and external language runtimes from the normal release build path.
