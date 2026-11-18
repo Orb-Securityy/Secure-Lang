@@ -1902,14 +1902,17 @@ class Compiler:
                 if a.k == "Var" and not self.is_copy(pt):
                     ents.append((a.name, "move"))
                 cs[i] = c
-        # Phase 2 evaluates reference-place expressions (including index and
-        # slice-bound expressions) before forming pointers. They must run only
-        # after every by-value argument has completed, as required by the
-        # language's left-to-right call evaluation rule.
+        # Phase 2 evaluates every reference-place expression (including
+        # index and slice-bound expressions). Do this only after all by-value
+        # arguments, but before forming any pointer: a later reference target
+        # may call code that reallocates an earlier target's container.
+        for a, pt in plan:
+            if pt.k == "ref" and a.k == "Ref":
+                self.prep_ref_target(a)
+        # Phase 3 forms pointers only after all argument expressions have run;
+        # no user code is evaluated after this point.
         for i, (a, pt) in enumerate(plan):
             if pt.k == "ref":
-                if a.k == "Ref":
-                    self.prep_ref_target(a)
                 cs[i] = self.form_ref(a, pt, ents)
         self.check_conflicts(ents, n)
         # Only now is the call guaranteed to execute: if a later argument
