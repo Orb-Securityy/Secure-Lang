@@ -228,6 +228,25 @@ def lower_to_ir(items):
                 _error("unsupported native `else` body", node.els)
         instructions.append(IRLabel(end_label))
 
+    def lower_while(node, bindings):
+        cond_label = new_label()
+        body_label = new_label()
+        end_label = new_label()
+        instructions.append(IRLabel(cond_label))
+        cond = node.cond
+        if cond.k != "Binary" or cond.op not in COMPARISONS:
+            _error("native while conditions must compare two i32 values", cond)
+        if (_expression_kind(cond.l, bindings, constants) != "i32"
+                or _expression_kind(cond.r, bindings, constants) != "i32"):
+            _error("native while comparisons require two i32 operands", cond)
+        left = _lower_i32(cond.l, bindings, constants, instructions, next_slot)
+        right = _lower_i32(cond.r, bindings, constants, instructions, next_slot)
+        instructions.append(IRCompareBranch(left, cond.op, right, body_label, end_label))
+        instructions.append(IRLabel(body_label))
+        lower_block(node.body, bindings)
+        instructions.append(IRJump(cond_label))
+        instructions.append(IRLabel(end_label))
+
     def lower_print(call, bindings):
         if call.fn.k != "Var" or call.fn.name not in ("print", "println"):
             _error("native subset supports only `print` and `println`", call)
@@ -244,8 +263,8 @@ def lower_to_ir(items):
             instructions.append(IRWrite(b"", True))
 
     def lower_block(block, outer_bindings):
-        if block.tail is not None and block.tail.k != "If":
-            _error("native blocks only support `if` as a tail expression", block)
+        if block.tail is not None and block.tail.k not in ("If", "While"):
+            _error("native blocks only support `if` and `while` as tail expressions", block)
         bindings = dict(outer_bindings)
         for stmt in block.stmts:
             if stmt.k == "Let":
@@ -297,10 +316,15 @@ def lower_to_ir(items):
                 instructions.append(IRStoreI32(destination.slot, source))
             elif stmt.k == "ExprStmt" and stmt.e.k == "If":
                 lower_if(stmt.e, bindings)
+            elif stmt.k == "ExprStmt" and stmt.e.k == "While":
+                lower_while(stmt.e, bindings)
             else:
-                _error("native subset supports only immutable bindings, print calls, and if/else", stmt)
+                _error("native subset supports bindings, assignments, print calls, and if/while", stmt)
         if block.tail is not None:
-            lower_if(block.tail, bindings)
+            if block.tail.k == "If":
+                lower_if(block.tail, bindings)
+            else:
+                lower_while(block.tail, bindings)
 
     lower_block(main.body, {})
     instructions.append(IRExit(0))
