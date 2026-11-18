@@ -1,0 +1,13 @@
+// EXPECT-ERR: unused `Result` binding `result`
+fn inspect(value: Result<i32, i32>) -> bool {
+    match value {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+fn main() -> i32 {
+    let result: Result<i32, i32> = Ok(1);
+    let ignored = true || inspect(result);
+    println(ignored);
+    return 0;
+}

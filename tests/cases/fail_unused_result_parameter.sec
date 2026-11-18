@@ -1,0 +1,5 @@
+// EXPECT-ERR: unused `Result` binding `value`
+fn ignore(value: Result<i32, i32>) {}
+fn main() {
+    ignore(Err(7));
+}

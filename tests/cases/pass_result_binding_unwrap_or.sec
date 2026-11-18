@@ -1,0 +1,6 @@
+// EXPECT-OUT: 5
+fn main() -> i32 {
+    let value: Result<i32, i32> = Ok(5);
+    println(value.unwrap_or(0));
+    return 0;
+}
