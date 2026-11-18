@@ -1377,7 +1377,11 @@ class Compiler:
         if t.k == "int" and to.k == "int":
             slo, shi = int_range(t.name)
             tlo, thi = int_range(to.name)
-            if n.wrapping or (tlo <= slo and shi <= thi):
+            if n.wrapping:
+                # Route through the runtime's width-limited conversion so signed
+                # wrapping never depends on an out-of-range unsigned-to-signed C cast.
+                return self.tmp(to.name, f"sec_wrap_{to.name}((__uint128_t)({c}))"), to
+            if tlo <= slo and shi <= thi:
                 return self.tmp(to.name, f"({to.name}){c}"), to
             cv = self.cval(n.e, t.name)
             if cv is not None and not tlo <= cv <= thi:
