@@ -1,15 +1,17 @@
 // EXPECT-IN: <script>alert("x")</script> & '
-// EXPECT-OUT: &lt;script&gt;alert("x")&lt;/script&gt; &amp; '
-// EXPECT-OUT: &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;
-// EXPECT-OUT: &amp;lt;
+// EXPECT-OUT: <p>&lt;script&gt;alert("x")&lt;/script&gt; &amp; '</p>
+// EXPECT-OUT: <div title="&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;">static</div>
 fn main() -> i32 {
     match read_line() {
         Some(input) => {
-            println(html_escape_text(input.as_str()));
-            println(html_escape_attr(input.as_str()));
+            print("<p>");
+            html_write_text(html_escape_text(input.as_str()));
+            println("</p>");
+            print("<div title=\""); 
+            html_write_attr_value(html_escape_attr(input.as_str()));
+            println("\">static</div>");
         }
         None => panic("test input missing"),
     }
-    println(html_escape_attr("&lt;"));
     return 0;
 }
