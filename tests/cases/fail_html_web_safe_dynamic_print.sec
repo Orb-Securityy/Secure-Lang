@@ -1,0 +1,9 @@
+// FLAGS: --web-safe
+// EXPECT-ERR: web-safe mode rejects dynamic string output through print/println
+fn main() -> i32 {
+    match read_line() {
+        Some(input) => print(input),
+        None => print("no input"),
+    }
+    return 0;
+}
