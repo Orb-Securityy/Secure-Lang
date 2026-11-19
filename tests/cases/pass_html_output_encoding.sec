@@ -16,7 +16,7 @@ fn main() -> i32 {
             html_write_text(escape_text(input.as_str()));
             println("</p>");
             print("<div title=\""); 
-            html_write_attr_value(html_escape_attr(input.as_str()));
+            html_write_attr_value(escape_attr(input.as_str()));
             println("\">static</div>");
         }
         None => panic("test input missing"),
