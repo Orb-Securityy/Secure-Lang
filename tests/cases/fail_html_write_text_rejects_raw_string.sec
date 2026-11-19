@@ -1,0 +1,4 @@
+// EXPECT-ERR: mismatched types: expected `HtmlText`, found `str`
+fn main() {
+    html_write_text("<script>alert(1)</script>");
+}
