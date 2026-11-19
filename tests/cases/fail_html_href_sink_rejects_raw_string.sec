@@ -1,0 +1,4 @@
+// EXPECT-ERR: mismatched types: expected `HtmlHrefAttr`, found `str`
+fn main() {
+    html_write_href_attr("href=\"javascript:alert(1)\"");
+}

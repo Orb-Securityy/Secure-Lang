@@ -1,0 +1,5 @@
+// FLAGS: --web-safe
+// EXPECT-ERR: `unsafe` blocks are forbidden by --forbid-unsafe
+fn main() {
+    unsafe { }
+}

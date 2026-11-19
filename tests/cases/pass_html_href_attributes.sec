@@ -1,0 +1,83 @@
+// EXPECT-OUT: <a href="https://example.com/search?q=a&amp;b=c">external</a>
+// EXPECT-OUT: <a href="/account/profile?tab=1&amp;mode=full">local</a>
+// EXPECT-OUT: <a href="images/logo.png">relative</a>
+// EXPECT-OUT: blocked scheme
+// EXPECT-OUT: blocked protocol-relative URL
+// EXPECT-OUT: blocked invalid port
+// EXPECT-OUT: <a href="https://[2001:db8::1]:8443/path">ipv6</a>
+// EXPECT-OUT: blocked userinfo
+// EXPECT-OUT: blocked zero port
+// EXPECT-OUT: blocked data scheme
+// EXPECT-OUT: blocked backslash
+// EXPECT-OUT: blocked control character
+fn build_href(url: &str) -> Option<HtmlHrefAttr> {
+    html_href_attr(url)
+}
+
+fn main() -> i32 {
+    match build_href("https://example.com/search?q=a&b=c") {
+        Some(attribute) => {
+            print("<a ");
+            html_write_href_attr(attribute);
+            println(">external</a>");
+        }
+        None => panic("valid HTTPS URL rejected"),
+    }
+    match build_href("/account/profile?tab=1&mode=full") {
+        Some(attribute) => {
+            print("<a ");
+            html_write_href_attr(attribute);
+            println(">local</a>");
+        }
+        None => panic("valid root-relative URL rejected"),
+    }
+    match build_href("images/logo.png") {
+        Some(attribute) => {
+            print("<a ");
+            html_write_href_attr(attribute);
+            println(">relative</a>");
+        }
+        None => panic("valid relative URL rejected"),
+    }
+    match build_href("JaVaScRiPt:alert(1)") {
+        Some(_) => panic("script scheme accepted"),
+        None => println("blocked scheme"),
+    }
+    match build_href("//evil.example/path") {
+        Some(_) => panic("protocol-relative URL accepted"),
+        None => println("blocked protocol-relative URL"),
+    }
+    match build_href("https://example.com:99999/path") {
+        Some(_) => panic("invalid port accepted"),
+        None => println("blocked invalid port"),
+    }
+    match build_href("https://[2001:db8::1]:8443/path") {
+        Some(attribute) => {
+            print("<a ");
+            html_write_href_attr(attribute);
+            println(">ipv6</a>");
+        }
+        None => panic("valid bracketed IPv6 URL rejected"),
+    }
+    match build_href("https://user@example.com/path") {
+        Some(_) => panic("userinfo URL accepted"),
+        None => println("blocked userinfo"),
+    }
+    match build_href("https://example.com:0/path") {
+        Some(_) => panic("zero port accepted"),
+        None => println("blocked zero port"),
+    }
+    match build_href("data:text/html,hello") {
+        Some(_) => panic("data scheme accepted"),
+        None => println("blocked data scheme"),
+    }
+    match build_href("https:\\evil.example/path") {
+        Some(_) => panic("backslash URL accepted"),
+        None => println("blocked backslash"),
+    }
+    match build_href("\tjavascript:alert(1)") {
+        Some(_) => panic("control character URL accepted"),
+        None => println("blocked control character"),
+    }
+    return 0;
+}

@@ -1,0 +1,6 @@
+// FLAGS: --web-safe
+// EXPECT-ERR: web-safe mode disables generic attribute-value output
+fn emit(value: HtmlAttr) {
+    html_write_attr_value(value);
+}
+fn main() { }

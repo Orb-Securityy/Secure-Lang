@@ -1,0 +1,33 @@
+// FLAGS: --web-safe
+// EXPECT-OUT: <button aria-label="&lt;img src=x onerror=1&gt;" title="safe &amp; sound">button</button>
+// EXPECT-OUT: blocked event handler
+// EXPECT-OUT: blocked style
+// EXPECT-OUT: blocked URL attribute
+fn main() -> i32 {
+    match html_attribute("aria-label", "<img src=x onerror=1>") {
+        Some(label) => {
+            print("<button ");
+            html_write_attribute(label);
+            print(" ");
+            match html_attribute("title", "safe & sound") {
+                Some(title) => html_write_attribute(title),
+                None => panic("title was not allowlisted"),
+            }
+            println(">button</button>");
+        }
+        None => panic("ARIA label was not allowlisted"),
+    }
+    match html_attribute("onclick", "alert(1)") {
+        Some(_) => panic("event handler attribute was allowlisted"),
+        None => println("blocked event handler"),
+    }
+    match html_attribute("style", "color:red") {
+        Some(_) => panic("style attribute was allowlisted"),
+        None => println("blocked style"),
+    }
+    match html_attribute("href", "javascript:alert(1)") {
+        Some(_) => panic("generic href attribute was allowlisted"),
+        None => println("blocked URL attribute"),
+    }
+    return 0;
+}

@@ -1,0 +1,29 @@
+// FLAGS: --web-safe
+// EXPECT-IN: <script>alert("x")</script> & '
+// EXPECT-OUT: <p>&lt;script&gt;alert("x")&lt;/script&gt; &amp; '</p>
+// EXPECT-OUT: <div title="&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;">static</div>
+fn escape_text(value: &str) -> HtmlText {
+    html_escape_text(value)
+}
+
+fn build_title(value: &str) -> Option<HtmlAttribute> {
+    html_attribute("title", value)
+}
+
+fn main() -> i32 {
+    match read_line() {
+        Some(input) => {
+            print("<p>");
+            html_write_text(escape_text(input.as_str()));
+            println("</p>");
+            print("<div ");
+            match build_title(input.as_str()) {
+                Some(attribute) => html_write_attribute(attribute),
+                None => panic("title attribute rejected"),
+            }
+            println(">static</div>");
+        }
+        None => panic("test input missing"),
+    }
+    return 0;
+}
