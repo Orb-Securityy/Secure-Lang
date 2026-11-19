@@ -1,0 +1,7 @@
+// FLAGS: --web-safe
+// EXPECT-OUT: <h1>trusted static title</h1>
+const TITLE: str = "<h1>trusted static title</h1>";
+fn main() -> i32 {
+    println(TITLE);
+    return 0;
+}
