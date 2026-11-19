@@ -124,7 +124,8 @@ def audit_report(path, src, comp):
             "sha256": hashlib.sha256(src.encode()).hexdigest(),
             "unsafe_blocks": comp.audit["unsafe_blocks"], "unsafe_fns": comp.audit["unsafe_fns"],
             "extern_fns": comp.audit["extern_fns"],
-            "safe_subset": not (comp.audit["unsafe_blocks"] or comp.audit["unsafe_fns"] or comp.audit["extern_fns"])}
+            "safe_subset": not (comp.audit["unsafe_blocks"] or comp.audit["unsafe_fns"] or comp.audit["extern_fns"]),
+            "web_safe": comp.web_safe}
 
 
 def main(argv=None):
