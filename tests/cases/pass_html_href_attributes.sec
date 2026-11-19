@@ -1,0 +1,49 @@
+// EXPECT-OUT: <a href="https://example.com/search?q=a&amp;b=c">external</a>
+// EXPECT-OUT: <a href="/account/profile?tab=1&amp;mode=full">local</a>
+// EXPECT-OUT: <a href="images/logo.png">relative</a>
+// EXPECT-OUT: blocked scheme
+// EXPECT-OUT: blocked protocol-relative URL
+// EXPECT-OUT: blocked invalid port
+fn build_href(url: &str) -> Option<HtmlHrefAttr> {
+    html_href_attr(url)
+}
+
+fn main() -> i32 {
+    match build_href("https://example.com/search?q=a&b=c") {
+        Some(attribute) => {
+            print("<a ");
+            html_write_href_attr(attribute);
+            println(">external</a>");
+        }
+        None => panic("valid HTTPS URL rejected"),
+    }
+    match build_href("/account/profile?tab=1&mode=full") {
+        Some(attribute) => {
+            print("<a ");
+            html_write_href_attr(attribute);
+            println(">local</a>");
+        }
+        None => panic("valid root-relative URL rejected"),
+    }
+    match build_href("images/logo.png") {
+        Some(attribute) => {
+            print("<a ");
+            html_write_href_attr(attribute);
+            println(">relative</a>");
+        }
+        None => panic("valid relative URL rejected"),
+    }
+    match build_href("JaVaScRiPt:alert(1)") {
+        Some(_) => panic("script scheme accepted"),
+        None => println("blocked scheme"),
+    }
+    match build_href("//evil.example/path") {
+        Some(_) => panic("protocol-relative URL accepted"),
+        None => println("blocked protocol-relative URL"),
+    }
+    match build_href("https://example.com:99999/path") {
+        Some(_) => panic("invalid port accepted"),
+        None => println("blocked invalid port"),
+    }
+    return 0;
+}
