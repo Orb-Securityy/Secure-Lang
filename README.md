@@ -68,7 +68,7 @@ impl Account {
 | HTML text / quoted-attribute output encoding | Implemented primitives; not enforced at output sinks |
 | Generics for user code, traits, closures, modules | **Not yet** |
 | Package manager, dependency pinning/signing | **Not yet** |
-| Standard library beyond core types (files, sockets, TLS, crypto) | **Not yet** (only `ct_eq`, `zeroize`, `parse_i64`, stdin) |
+| Standard library beyond core types (files, sockets, TLS, crypto) | **Not yet** (helpers include `ct_eq`, `zeroize`, `parse_i64`, stdin and HTML output encoders) |
 | Mutex / channels / atomics | **Not yet** |
 | Self-hosting; own backend (removing GCC from the trusted base) | **Not yet** |
 | Formal verification of the checker | **Not yet** |
