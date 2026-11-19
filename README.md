@@ -29,9 +29,11 @@ python3 bench/run_bench.py          # performance vs unchecked C
 Web-output primitives: `html_escape_text(&str) -> HtmlText` and `html_escape_attr(&str) -> HtmlAttr`
 produce distinct opaque types. Only `html_write_text(HtmlText)` and
 `html_write_attr_value(HtmlAttr)` accept those values; a raw `String` or the wrong context is a
-compile-time type error. These sinks consume their arguments. They are not HTML sanitizers, URL
-validators, or JavaScript/CSS encoders; generic `print` remains an unrestricted non-web output API.
-See [the security model](docs/SECURITY.md) for the exact boundaries.
+compile-time type error. Links use `html_href_attr(&str) -> Option<HtmlHrefAttr>` plus
+`html_write_href_attr(HtmlHrefAttr)`, which rejects non-HTTP schemes and emits a complete quoted
+`href` attribute. These sinks consume their arguments. Generic `print` remains an unrestricted
+non-web output API unless `--web-safe` is enabled. See [the security model](docs/SECURITY.md)
+for the exact URL policy and limitations.
 
 ```
 enum Error { Overflow }
