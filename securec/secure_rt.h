@@ -244,6 +244,110 @@ static inline Vec_u8 sec_html_escape(Slice_u8 input, bool attribute) {
     return out;
 }
 
+/* Strict href policy: allow same-origin/relative references and absolute HTTP(S)
+   URLs with an ASCII host. Reject controls, backslashes, protocol-relative URLs,
+   userinfo, non-HTTP schemes, malformed hosts, and invalid ports. */
+static inline bool sec_href_ascii_alnum(u8 c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9');
+}
+
+static inline bool sec_href_port_valid(Slice_u8 s, usize begin, usize end) {
+    if (begin == end) return true;
+    if (s.p[begin] != ':') return false;
+    begin++;
+    if (begin == end || end - begin > 5) return false;
+    u32 port = 0;
+    for (usize i = begin; i < end; i++) {
+        if (s.p[i] < '0' || s.p[i] > '9') return false;
+        port = port * 10 + (u32)(s.p[i] - '0');
+    }
+    return port > 0 && port <= 65535;
+}
+
+static inline bool sec_href_prefix_ci(Slice_u8 s, const char *prefix) {
+    usize i = 0;
+    for (; prefix[i] != 0; i++) {
+        if (i >= s.n) return false;
+        u8 c = s.p[i];
+        if (c >= 'A' && c <= 'Z') c = (u8)(c + ('a' - 'A'));
+        if (c != (u8)prefix[i]) return false;
+    }
+    return true;
+}
+
+static inline bool sec_html_href_allowed(Slice_u8 s) {
+    for (usize i = 0; i < s.n; i++) {
+        u8 c = s.p[i];
+        if (c <= 0x20 || c == 0x7f || c == '\\\\') return false;
+    }
+    if (s.n == 0) return true;
+    if (s.p[0] == '/') return s.n == 1 || s.p[1] != '/';
+
+    usize colon = s.n;
+    for (usize i = 0; i < s.n; i++) {
+        u8 c = s.p[i];
+        if (c == ':') { colon = i; break; }
+        if (c == '/' || c == '?' || c == '#') break;
+    }
+    if (colon == s.n) return true; /* ordinary relative path, query or fragment */
+
+    usize authority = 0;
+    if (sec_href_prefix_ci(s, "https://")) authority = 8;
+    else if (sec_href_prefix_ci(s, "http://")) authority = 7;
+    else return false; /* includes javascript:, data:, vbscript:, mailto:, etc. */
+
+    usize end = authority;
+    while (end < s.n && s.p[end] != '/' && s.p[end] != '?' && s.p[end] != '#') end++;
+    if (end == authority) return false;
+
+    for (usize i = authority; i < end; i++)
+        if (s.p[i] == '@') return false; /* no userinfo */
+
+    if (s.p[authority] == '[') {
+        usize close = authority + 1;
+        bool has_colon = false;
+        while (close < end && s.p[close] != ']') {
+            u8 c = s.p[close];
+            if (c == ':') has_colon = true;
+            else if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+                       (c >= 'A' && c <= 'F') || c == '.')) return false;
+            close++;
+        }
+        if (close == end || close == authority + 1 || !has_colon) return false;
+        if (close + 1 < end && s.p[close + 1] != ':') return false;
+        return sec_href_port_valid(s, close + 1, end);
+    }
+
+    usize port_sep = end;
+    for (usize i = authority; i < end; i++) {
+        u8 c = s.p[i];
+        if (c == ':') {
+            if (port_sep != end) return false; /* IPv6 must use brackets */
+            port_sep = i;
+        } else if (!(sec_href_ascii_alnum(c) || c == '.' || c == '-')) {
+            return false;
+        }
+    }
+    if (port_sep == authority || s.p[authority] == '.' ||
+        s.p[port_sep - 1] == '.' || s.p[authority] == '-' || s.p[port_sep - 1] == '-')
+        return false;
+    for (usize i = authority + 1; i < port_sep; i++)
+        if (s.p[i] == '.' && s.p[i - 1] == '.') return false;
+    return sec_href_port_valid(s, port_sep, end);
+}
+
+static inline bool sec_html_href_attr(Slice_u8 input, Vec_u8 *out) {
+    if (!sec_html_href_allowed(input)) return false;
+    Vec_u8 escaped = sec_html_escape(input, true);
+    Vec_u8 value = Vec_u8_from((Slice_u8){(u8 *)"href=\\\"", 6});
+    Vec_u8_push_str(&value, (Slice_u8){escaped.p, escaped.len});
+    Vec_u8_push(&value, (u8)'\\\"');
+    Vec_u8_drop(&escaped);
+    *out = value;
+    return true;
+}
+
 /* ---- security helpers ------------------------------------------------------ */
 static inline bool sec_ct_eq(Slice_u8 a, Slice_u8 b) {   /* length is public; contents compared without early exit */
     if (a.n != b.n) return false;
