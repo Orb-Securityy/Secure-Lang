@@ -93,6 +93,10 @@ A `Task` dropped without `join` is joined automatically.
 `print(..)`, `println(..)` (any number of int/float/bool/str/String/enum args), `exit(i32)`, `panic(&str)`,
 `assert(bool)`, `read_line() -> Option<String>` (`None` on EOF; stdin I/O errors panic), `parse_i64(&str) -> Option<i64>` (strict, overflow-safe),
 `str_eq(&str,&str)`, `ct_eq(&[u8],&[u8])` (no early exit), `zeroize(&mut [u8])` (not elided by the optimizer).
+HTML output encoding: `html_escape_text(&str) -> String` encodes `&`, `<`, and `>` for an HTML text node;
+`html_escape_attr(&str) -> String` additionally encodes `"` and `'` for a quoted HTML attribute value.
+These are byte-preserving output encoders, not sanitizers or typed-safe HTML values. Do not use them for JavaScript,
+CSS, URL components, unquoted attributes, or as a substitute for URL scheme validation.
 Methods: `len is_empty as_ptr swap` (arrays/slices/Vec), `Vec: push pop clear get`, `String: push push_str clear`,
 `Option/Result: is_some is_none is_ok is_err unwrap unwrap_or`, `Task: join`, ints: `abs min max pow`,
 f64: `sqrt abs floor`.
