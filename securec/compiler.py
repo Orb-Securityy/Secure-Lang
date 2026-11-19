@@ -17,9 +17,9 @@ from .ty import *
 
 IDENT_RE = re.compile(r"[A-Za-z_]\w*")
 LVAL_RE = re.compile(r"(?:_t|_r|v_)\w*")
-BUILTIN_TYPES = set(INTS) | {"f64", "bool", "str", "String", "HtmlText", "HtmlAttr", "HtmlHrefAttr", "Vec", "Option", "Result", "Task", "Self"}
+BUILTIN_TYPES = set(INTS) | {"f64", "bool", "str", "String", "HtmlText", "HtmlAttr", "HtmlHrefAttr", "HtmlAttribute", "Vec", "Option", "Result", "Task", "Self"}
 BUILTIN_FUNCS = {"print", "println", "exit", "panic", "assert", "read_line", "parse_i64", "str_eq", "ct_eq", "html_escape_text", "html_escape_attr",
-                 "html_write_text", "html_write_attr_value", "html_href_attr", "html_write_href_attr", "zeroize", "spawn", "wrapping_add", "wrapping_sub", "wrapping_mul", "saturating_add",
+                 "html_write_text", "html_write_attr_value", "html_href_attr", "html_write_href_attr", "html_attribute", "html_write_attribute", "zeroize", "spawn", "wrapping_add", "wrapping_sub", "wrapping_mul", "saturating_add",
                  "saturating_sub", "saturating_mul", "checked_add", "checked_sub", "checked_mul",
                  "Some", "Ok", "Err", "None"}
 PLACE_KINDS = ("Var", "Field", "Index", "Deref")
@@ -201,6 +201,7 @@ class Compiler:
             if nm == "HtmlText": need(0); return HTML_TEXT
             if nm == "HtmlAttr": need(0); return HTML_ATTR
             if nm == "HtmlHrefAttr": need(0); return HTML_HREF_ATTR
+            if nm == "HtmlAttribute": need(0); return HTML_ATTRIBUTE
             if nm == "Self":
                 if selfty is None:
                     self.err("`Self` is only valid inside `impl`", n)
@@ -275,7 +276,7 @@ class Compiler:
 
     def needs_drop(self, t):
         k = t.k
-        if k in ("string", "html_text", "html_attr", "html_href_attr", "vec", "task"): return True
+        if k in ("string", "html_text", "html_attr", "html_href_attr", "html_attribute", "vec", "task"): return True
         if k == "struct": return any(self.needs_drop(ft) for _, ft in self.structs[t.name]["fields"])
         if k in ("option", "result", "array"): return any(self.needs_drop(a) for a in t.args)
         return False
@@ -294,6 +295,7 @@ class Compiler:
         if k == "html_text": return "HtmlText"
         if k == "html_attr": return "HtmlAttr"
         if k == "html_href_attr": return "HtmlHrefAttr"
+        if k == "html_attribute": return "HtmlAttribute"
         if k in ("struct", "enum"): return "T_" + t.name
         if k == "array": return f"Arr_{self.mangle(t.args[0])}_{t.n}"
         if k == "slice": return "Slice_" + self.mangle(t.args[0])
@@ -313,7 +315,7 @@ class Compiler:
         if k == "bool": return "bool"
         if k in ("unit", "never"): return "sec_unit"
         if k == "str": return "Slice_u8"
-        if k in ("string", "html_text", "html_attr", "html_href_attr"): return "Vec_u8"
+        if k in ("string", "html_text", "html_attr", "html_href_attr", "html_attribute"): return "Vec_u8"
         if k == "enum": return "T_" + t.name
         if k == "struct":
             m = self.mangle(t)
@@ -332,7 +334,7 @@ class Compiler:
         return self.mangle(t)
 
     def drop_fn(self, t):
-        if t.k in ("string", "html_text", "html_attr", "html_href_attr"): return "Vec_u8_drop"
+        if t.k in ("string", "html_text", "html_attr", "html_href_attr", "html_attribute"): return "Vec_u8_drop"
         if t.k in ("vec", "task"): return self.mangle(t) + "_drop"
         return "drop_" + self.mangle(t)
 
@@ -2433,15 +2435,29 @@ class Compiler:
             cs = self.lower_args([("a", False, sl), ("b", False, sl)], args, n)
             return self.tmp("bool", f"sec_ct_eq({cs[0]}, {cs[1]})"), BOOL
         if nm in ("html_escape_text", "html_escape_attr"):
+            if self.web_safe and nm == "html_escape_attr":
+                self.err("web-safe mode requires html_attribute(...) for allowlisted inert attributes; generic attribute values are disabled", n)
             cs = self.lower_args([("value", False, ref(STR))], args, n)
             attribute = "true" if nm == "html_escape_attr" else "false"
             out_ty = HTML_ATTR if nm == "html_escape_attr" else HTML_TEXT
             return self.tmp(self.ctype(out_ty), f"sec_html_escape({cs[0]}, {attribute})"), out_ty
         if nm in ("html_write_text", "html_write_attr_value"):
+            if self.web_safe and nm == "html_write_attr_value":
+                self.err("web-safe mode disables generic attribute-value output; use html_attribute(...) or html_href_attr(...)", n)
             value_ty = HTML_ATTR if nm == "html_write_attr_value" else HTML_TEXT
             cs = self.lower_args([("value", False, value_ty)], args, n)
             helper = "sec_html_write_attr_value" if nm == "html_write_attr_value" else "sec_html_write_text"
             self.emit(f"{helper}({cs[0]});")
+            return "SEC_UNIT", UNIT
+        if nm == "html_attribute":
+            cs = self.lower_args([("name", False, ref(STR)), ("value", False, ref(STR))], args, n)
+            out_ty = option(HTML_ATTRIBUTE)
+            out = self.tmp(self.ctype(out_ty), "{0}")
+            self.emit(f"{out}.some = sec_html_attribute({cs[0]}, {cs[1]}, &{out}.v);")
+            return out, out_ty
+        if nm == "html_write_attribute":
+            cs = self.lower_args([("attribute", False, HTML_ATTRIBUTE)], args, n)
+            self.emit(f"sec_html_write_attribute({cs[0]});")
             return "SEC_UNIT", UNIT
         if nm == "html_href_attr":
             cs = self.lower_args([("url", False, ref(STR))], args, n)
