@@ -1,0 +1,15 @@
+// EXPECT-IN: <script>alert("x")</script> & '
+// EXPECT-OUT: &lt;script&gt;alert("x")&lt;/script&gt; & '
+// EXPECT-OUT: &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;
+// EXPECT-OUT: &amp;lt;
+fn main() -> i32 {
+    match read_line() {
+        Some(input) => {
+            println(html_escape_text(input.as_str()));
+            println(html_escape_attr(input.as_str()));
+        }
+        None => panic("test input missing"),
+    }
+    println(html_escape_attr("&lt;"));
+    return 0;
+}
