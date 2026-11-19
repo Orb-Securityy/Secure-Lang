@@ -221,6 +221,29 @@ static inline bool sec_str_eq(Slice_u8 a, Slice_u8 b) { return a.n == b.n && (a.
 static inline void Vec_u8_push_str(Vec_u8 *v, Slice_u8 s) { for (usize i = 0; i < s.n; i++) Vec_u8_push(v, s.p[i]); }
 static inline Vec_u8 Vec_u8_from(Slice_u8 s) { Vec_u8 v = Vec_u8_new(); Vec_u8_push_str(&v, s); return v; }
 
+/* Context-specific HTML output encoding. This is encoding, not sanitization. */
+static inline Vec_u8 sec_html_escape(Slice_u8 input, bool attribute) {
+    Vec_u8 out = Vec_u8_new();
+    for (usize i = 0; i < input.n; i++) {
+        const char *entity = NULL;
+        switch (input.p[i]) {
+            case '&': entity = "&amp;"; break;
+            case '<': entity = "&lt;"; break;
+            case '>': entity = "&gt;"; break;
+            case '"': if (attribute) entity = "&quot;"; break;
+            case '\'': if (attribute) entity = "&#39;"; break;
+            default: break;
+        }
+        if (entity) {
+            for (usize j = 0; entity[j] != '\\0'; j++)
+                Vec_u8_push(&out, (u8)entity[j]);
+        } else {
+            Vec_u8_push(&out, input.p[i]);
+        }
+    }
+    return out;
+}
+
 /* ---- security helpers ------------------------------------------------------ */
 static inline bool sec_ct_eq(Slice_u8 a, Slice_u8 b) {   /* length is public; contents compared without early exit */
     if (a.n != b.n) return false;
