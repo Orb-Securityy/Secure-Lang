@@ -100,7 +100,9 @@ The opaque `HtmlText` and `HtmlAttr` types are distinct from `String` and from e
 strings and the wrong output context at compile time. Attribute-value output must still be placed inside a
 trusted, double-quoted attribute. These primitives are encoders, not sanitizers. Do not use them for JavaScript,
 CSS, URL components, unquoted attributes, or as a substitute for URL scheme validation. Generic `print` remains
-available for non-web output and is not a safe HTML sink.
+available for non-web output and is not a safe HTML sink. The opt-in `--web-safe` compilation mode rejects dynamic
+`str`/`String` values sent through `print`/`println`, allows literal and compile-time constant markup, and
+implicitly forbids `unsafe` blocks, `unsafe fn` and `extern` calls.
 Methods: `len is_empty as_ptr swap` (arrays/slices/Vec), `Vec: push pop clear get`, `String: push push_str clear`,
 `Option/Result: is_some is_none is_ok is_err unwrap unwrap_or`, `Task: join`, ints: `abs min max pow`,
 f64: `sqrt abs floor`.
