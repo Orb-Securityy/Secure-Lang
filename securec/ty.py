@@ -34,7 +34,7 @@ def I(name):
 
 I32, I64, U8, U32, U64, USIZE = I("i32"), I("i64"), I("u8"), I("u32"), I("u64"), I("usize")
 F64, BOOL, UNIT, NEVER, STR, STRING = Ty("float", "f64"), Ty("bool"), Ty("unit"), Ty("never"), Ty("str"), Ty("string")
-HTML_TEXT, HTML_ATTR = Ty("html_text"), Ty("html_attr")
+HTML_TEXT, HTML_ATTR, HTML_HREF_ATTR = Ty("html_text"), Ty("html_attr"), Ty("html_href_attr")
 
 
 def ref(t, mut=False): return Ty("ref", "mut" if mut else "", (t,))
@@ -59,6 +59,7 @@ def tstr(t):
     if k == "string": return "String"
     if k == "html_text": return "HtmlText"
     if k == "html_attr": return "HtmlAttr"
+    if k == "html_href_attr": return "HtmlHrefAttr"
     if k == "ref": return "&" + ("mut " if t.name == "mut" else "") + tstr(t.args[0])
     if k == "ptr": return ("*mut " if t.name == "mut" else "*const ") + tstr(t.args[0])
     if k == "slice": return "[" + tstr(t.args[0]) + "]"
