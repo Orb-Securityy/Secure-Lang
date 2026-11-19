@@ -348,6 +348,44 @@ static inline bool sec_html_href_attr(Slice_u8 input, Vec_u8 *out) {
     return true;
 }
 
+/* Only non-executable, non-URL attribute names are allowed here. */
+static inline bool sec_html_attr_name_allowed(Slice_u8 name) {
+    static const char *const exact[] = {
+        "alt", "title", "placeholder", "role", "lang", "dir", "for",
+        "autocomplete", "inputmode", "tabindex"
+    };
+    if (name.n == 0) return false;
+    for (usize i = 0; i < sizeof(exact) / sizeof(exact[0]); i++) {
+        usize n = strlen(exact[i]);
+        if (name.n == n && memcmp(name.p, exact[i], n) == 0) return true;
+    }
+    if (name.n > 5 && memcmp(name.p, "aria-", 5) == 0) {
+        for (usize i = 5; i < name.n; i++) {
+            u8 c = name.p[i];
+            bool alpha = (c >= 'a' && c <= 'z');
+            bool digit = (c >= '0' && c <= '9');
+            if (!alpha && !digit && c != '-') return false;
+            if (c == '-' && (i == 5 || i + 1 == name.n || name.p[i - 1] == '-'))
+                return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+static inline bool sec_html_attribute(Slice_u8 name, Slice_u8 input, Vec_u8 *out) {
+    if (!sec_html_attr_name_allowed(name)) return false;
+    Vec_u8 escaped = sec_html_escape(input, true);
+    Vec_u8 value = Vec_u8_from(name);
+    Vec_u8_push(&value, (u8)'=');
+    Vec_u8_push(&value, (u8)'"');
+    Vec_u8_push_str(&value, (Slice_u8){escaped.p, escaped.len});
+    Vec_u8_push(&value, (u8)'"');
+    Vec_u8_drop(&escaped);
+    *out = value;
+    return true;
+}
+
 /* ---- security helpers ------------------------------------------------------ */
 static inline bool sec_ct_eq(Slice_u8 a, Slice_u8 b) {   /* length is public; contents compared without early exit */
     if (a.n != b.n) return false;
@@ -372,6 +410,10 @@ static inline void sec_html_write_attr_value(Vec_u8 value) {
     Vec_u8_drop(&value);
 }
 static inline void sec_html_write_href_attr(Vec_u8 value) {
+    sec_print_str((Slice_u8){value.p, value.len});
+    Vec_u8_drop(&value);
+}
+static inline void sec_html_write_attribute(Vec_u8 value) {
     sec_print_str((Slice_u8){value.p, value.len});
     Vec_u8_drop(&value);
 }
