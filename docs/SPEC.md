@@ -98,8 +98,13 @@ HTML output encoding: `html_escape_text(&str) -> HtmlText` encodes `&`, `<`, and
 The opaque `HtmlText` and `HtmlAttr` types are distinct from `String` and from each other.
 `html_write_text(HtmlText)` and `html_write_attr_value(HtmlAttr)` are consuming output sinks; they reject raw
 strings and the wrong output context at compile time. Attribute-value output must still be placed inside a
-trusted, double-quoted attribute. These primitives are encoders, not sanitizers. Do not use them for JavaScript,
-CSS, URL components, unquoted attributes, or as a substitute for URL scheme validation. Generic `print` remains
+trusted, double-quoted attribute. For links, use `html_href_attr(&str) -> Option<HtmlHrefAttr>` and
+`html_write_href_attr(HtmlHrefAttr)`, which validate and emit a complete quoted `href="..."` attribute.
+The href validator accepts relative references and absolute HTTP(S) URLs with ASCII hosts (or bracketed IPv6),
+rejects protocol-relative URLs and non-HTTP schemes, and rejects controls, backslashes, userinfo, and invalid
+ports. Internationalized hostnames must be supplied in ASCII/Punycode form. These primitives are encoders and
+validators, not sanitizers. Do not use them for JavaScript, CSS, unquoted attributes, or other URL-bearing
+attributes such as `src` without an equally specific policy. Generic `print` remains
 available for non-web output and is not a safe HTML sink. The opt-in `--web-safe` compilation mode rejects dynamic
 `str`/`String` values sent through `print`/`println`, allows literal and compile-time constant markup, and
 implicitly forbids `unsafe` blocks, `unsafe fn` and `extern` calls.
