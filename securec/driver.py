@@ -47,7 +47,7 @@ def report(e, path, src):
             print(f"   | {' ' * len(terminal_safe(prefix))}^", file=sys.stderr)
 
 
-def compile_source(path, forbid_unsafe=False):
+def compile_source(path, forbid_unsafe=False, web_safe=False):
     try:
         with open(path, encoding="utf-8") as source_file:
             src = source_file.read()
@@ -62,7 +62,7 @@ def compile_source(path, forbid_unsafe=False):
         print(f"error: cannot read source file {terminal_safe(os.path.basename(path))}: {terminal_safe(exc.strerror or exc)}",
               file=sys.stderr)
         return None, None, None
-    comp = Compiler(src, path, forbid_unsafe)
+    comp = Compiler(src, path, forbid_unsafe, web_safe)
     try:
         csrc = comp.compile()
     except SecError as e:
@@ -134,11 +134,13 @@ def main(argv=None):
     ap.add_argument("-o", "--output")
     ap.add_argument("-O", dest="opt", default="2", choices=["0", "1", "2", "3"])
     ap.add_argument("--forbid-unsafe", action="store_true", help="reject unsafe blocks, unsafe fns and extern")
+    ap.add_argument("--web-safe", action="store_true",
+                    help="reject dynamic string output through print/println and forbid unsafe code")
     ap.add_argument("--strict-cc", action="store_true", help="build generated C with -Wall -Werror (compiler testing)")
     ap.add_argument("--sanitize", action="store_true", help="build with ASan/UBSan/LeakSanitizer (testing)")
     ap.add_argument("args", nargs="*")
     a = ap.parse_args(argv)
-    csrc, comp, src = compile_source(a.file, a.forbid_unsafe)
+    csrc, comp, src = compile_source(a.file, a.forbid_unsafe, a.web_safe)
     if csrc is None:
         return 1
     if a.cmd == "check":
