@@ -26,6 +26,11 @@ python tests/fuzz_frontend.py -atheris_runs=30000  # optional Atheris campaign
 python3 bench/run_bench.py          # performance vs unchecked C
 ```
 
+Web-output primitives (v0.1): `html_escape_text(&str)` for HTML text nodes and
+`html_escape_attr(&str)` for quoted HTML attribute values. They encode HTML syntax
+characters but do not sanitize markup, validate URL schemes, or cover JavaScript/CSS
+contexts. See [the security model](docs/SECURITY.md) before using them with untrusted input.
+
 ```
 enum Error { Overflow }
 struct Account { id: u32, balance: u64 }
@@ -60,6 +65,7 @@ impl Account {
 | Data-race freedom (ownership-transfer threads: `spawn`/`join`) | Implemented (no shared mutable state yet) |
 | `unsafe` / `extern` gating + `audit` report + `--forbid-unsafe` | Implemented |
 | Option / Result / `?`, must-use Results | Implemented |
+| HTML text / quoted-attribute output encoding | Implemented primitives; not enforced at output sinks |
 | Generics for user code, traits, closures, modules | **Not yet** |
 | Package manager, dependency pinning/signing | **Not yet** |
 | Standard library beyond core types (files, sockets, TLS, crypto) | **Not yet** (only `ct_eq`, `zeroize`, `parse_i64`, stdin) |
