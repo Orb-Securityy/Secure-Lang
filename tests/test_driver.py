@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import os
 import subprocess
 import tempfile
@@ -11,6 +12,34 @@ from securec.lexer import SecError
 
 
 class DriverInputTests(unittest.TestCase):
+    def test_audit_report_records_web_safe_profile(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "web.sec")
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write('fn main() -> i32 { print("<main>"); return 0; }')
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                result = main(["audit", path, "--web-safe"])
+
+            self.assertEqual(result, 0)
+            report_data = json.loads(stdout.getvalue())
+            self.assertTrue(report_data["web_safe"])
+            self.assertTrue(report_data["safe_subset"])
+
+    def test_audit_report_defaults_web_safe_to_false(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "default.sec")
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write("fn main() -> i32 { return 0; }")
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                result = main(["audit", path])
+
+            self.assertEqual(result, 0)
+            self.assertFalse(json.loads(stdout.getvalue())["web_safe"])
+
     def test_terminal_safe_escapes_control_and_bidi_characters(self):
         self.assertEqual(
             terminal_safe("hello\x1b[31m\u202e"),
