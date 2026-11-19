@@ -95,19 +95,24 @@ A `Task` dropped without `join` is joined automatically.
 `str_eq(&str,&str)`, `ct_eq(&[u8],&[u8])` (no early exit), `zeroize(&mut [u8])` (not elided by the optimizer).
 HTML output encoding: `html_escape_text(&str) -> HtmlText` encodes `&`, `<`, and `>` for an HTML text node;
 `html_escape_attr(&str) -> HtmlAttr` additionally encodes `"` and `'` for a quoted HTML attribute value.
-The opaque `HtmlText` and `HtmlAttr` types are distinct from `String` and from each other.
-`html_write_text(HtmlText)` and `html_write_attr_value(HtmlAttr)` are consuming output sinks; they reject raw
-strings and the wrong output context at compile time. Attribute-value output must still be placed inside a
-trusted, double-quoted attribute. For links, use `html_href_attr(&str) -> Option<HtmlHrefAttr>` and
-`html_write_href_attr(HtmlHrefAttr)`, which validate and emit a complete quoted `href="..."` attribute.
+The opaque `HtmlText`, `HtmlAttr`, `HtmlAttribute` and `HtmlHrefAttr` types are distinct from `String` and
+from each other. `html_write_text(HtmlText)` and `html_write_attr_value(HtmlAttr)` are consuming output sinks;
+the latter is a low-level API for non-web-safe builds. Under `--web-safe`, generic `html_escape_attr` and
+`html_write_attr_value` are rejected. Instead, `html_attribute(name, value) -> Option<HtmlAttribute>` accepts
+only an allowlist of inert names (`alt`, `title`, `placeholder`, `role`, `lang`, `dir`, `for`,
+`autocomplete`, `inputmode`, `tabindex`, and `aria-*`) and `html_write_attribute(HtmlAttribute)` emits
+the complete quoted attribute. Event-handler, style, and URL-bearing names are not on this allowlist.
+For links, use `html_href_attr(&str) -> Option<HtmlHrefAttr>` and `html_write_href_attr(HtmlHrefAttr)`,
+which validate and emit a complete quoted `href="..."` attribute.
 The href validator accepts relative references and absolute HTTP(S) URLs with ASCII hosts (or bracketed IPv6),
 rejects protocol-relative URLs and non-HTTP schemes, and rejects controls, backslashes, userinfo, and invalid
 ports. Internationalized hostnames must be supplied in ASCII/Punycode form. These primitives are encoders and
 validators, not sanitizers. Do not use them for JavaScript, CSS, unquoted attributes, or other URL-bearing
 attributes such as `src` without an equally specific policy. Generic `print` remains
 available for non-web output and is not a safe HTML sink. The opt-in `--web-safe` compilation mode rejects dynamic
-`str`/`String` values sent through `print`/`println`, allows literal and compile-time constant markup, and
-implicitly forbids `unsafe` blocks, `unsafe fn` and `extern` calls.
+`str`/`String` values sent through `print`/`println`, rejects the generic attribute-value API, requires
+allowlisted complete attributes or validated href attributes, allows literal and compile-time constant markup,
+and implicitly forbids `unsafe` blocks, `unsafe fn` and `extern` calls.
 Methods: `len is_empty as_ptr swap` (arrays/slices/Vec), `Vec: push pop clear get`, `String: push push_str clear`,
 `Option/Result: is_some is_none is_ok is_err unwrap unwrap_or`, `Task: join`, ints: `abs min max pow`,
 f64: `sqrt abs floor`.
