@@ -258,6 +258,15 @@ static inline void sec_print_i64(i64 x) { printf("%lld", (long long)x); }
 static inline void sec_print_u64(u64 x) { printf("%llu", (unsigned long long)x); }
 static inline void sec_print_bool(bool b) { fputs(b ? "true" : "false", stdout); }
 static inline void sec_print_str(Slice_u8 s) { if (s.n) fwrite(s.p, 1, s.n, stdout); }
+/* The only safe sinks for branded HTML values; they consume and release ownership. */
+static inline void sec_html_write_text(Vec_u8 value) {
+    sec_print_str((Slice_u8){value.p, value.len});
+    Vec_u8_drop(&value);
+}
+static inline void sec_html_write_attr_value(Vec_u8 value) {
+    sec_print_str((Slice_u8){value.p, value.len});
+    Vec_u8_drop(&value);
+}
 static inline void sec_print_nl(void) { fputc('\n', stdout); }
 static inline void sec_print_f64(f64 x) {   /* shortest decimal that round-trips; plain notation for moderate magnitudes */
     char buf[64];
