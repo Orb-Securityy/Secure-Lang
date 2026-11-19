@@ -235,7 +235,7 @@ static inline Vec_u8 sec_html_escape(Slice_u8 input, bool attribute) {
             default: break;
         }
         if (entity) {
-            for (usize j = 0; entity[j] != '\\0'; j++)
+            for (usize j = 0; entity[j] != 0; j++)
                 Vec_u8_push(&out, (u8)entity[j]);
         } else {
             Vec_u8_push(&out, input.p[i]);
