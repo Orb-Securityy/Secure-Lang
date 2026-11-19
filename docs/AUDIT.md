@@ -9,8 +9,10 @@ because everything an auditor needs about a *program* is derivable without the c
    and rebuild exactly what ships. Pair it with `securec/secure_rt.h` (the whole runtime, ~200 lines, shippable
    under NDA or publishable independently because it contains no compiler internals).
 2. **`securec audit prog.sec`** — JSON with the source SHA-256, every `unsafe` block, `unsafe fn` and `extern`
-   declaration with line numbers, and `safe_subset: true/false`. CI policy: fail the build when `safe_subset` is false
-   unless the sites are reviewed; or compile with `--forbid-unsafe`.
+   declaration with line numbers, `safe_subset: true/false`, and `web_safe: true/false` to record whether the
+   opt-in web output profile was enabled. Use `securec audit prog.sec --web-safe` to inspect that profile.
+   CI policy: fail the build when `safe_subset` is false unless the sites are reviewed; for web applications,
+   also require `web_safe: true`. This field records a compiler mode, not a proof that every HTTP response is safe.
 3. **Conformance suite** — `tests/cases` documents, executably, every guarantee (what must be rejected, what must
    trap). Customers can run it against the shipped `securec` binary to verify that the toolchain they received
    enforces the contract, without seeing the implementation.
