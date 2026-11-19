@@ -26,14 +26,13 @@ python tests/fuzz_frontend.py -atheris_runs=30000  # optional Atheris campaign
 python3 bench/run_bench.py          # performance vs unchecked C
 ```
 
-Web-output primitives: `html_escape_text(&str) -> HtmlText` and `html_escape_attr(&str) -> HtmlAttr`
-produce distinct opaque types. Only `html_write_text(HtmlText)` and
-`html_write_attr_value(HtmlAttr)` accept those values; a raw `String` or the wrong context is a
-compile-time type error. Links use `html_href_attr(&str) -> Option<HtmlHrefAttr>` plus
-`html_write_href_attr(HtmlHrefAttr)`, which rejects non-HTTP schemes and emits a complete quoted
-`href` attribute. These sinks consume their arguments. Generic `print` remains an unrestricted
-non-web output API unless `--web-safe` is enabled. See [the security model](docs/SECURITY.md)
-for the exact URL policy and limitations.
+Web-output primitives: `html_escape_text(&str) -> HtmlText` produces typed HTML text. In
+`--web-safe`, dynamic strings cannot go through `print`/`println`, and generic attribute-value
+escaping is disabled. Use `html_attribute(name, value) -> Option<HtmlAttribute>` for allowlisted
+inert attributes such as `title`, `alt`, and `aria-*`; it rejects event handlers, `style`, and
+URL attributes. Use `html_href_attr(&str) -> Option<HtmlHrefAttr>` for links; it validates the URL
+and emits the complete `href` attribute. See [the security model](docs/SECURITY.md) for the
+exact policies and limitations.
 
 ```
 enum Error { Overflow }
@@ -69,7 +68,7 @@ impl Account {
 | Data-race freedom (ownership-transfer threads: `spawn`/`join`) | Implemented (no shared mutable state yet) |
 | `unsafe` / `extern` gating + `audit` report + `--forbid-unsafe` | Implemented |
 | Option / Result / `?`, must-use Results | Implemented |
-| HTML text / quoted-attribute output encoding | Distinct types and typed sinks; `--web-safe` rejects dynamic strings sent to `print/println` and disables `unsafe` |
+| HTML output contexts | Typed text, inert-attribute and href builders; `--web-safe` rejects dynamic strings and generic attribute sinks, and disables `unsafe` |
 | Generics for user code, traits, closures, modules | **Not yet** |
 | Package manager, dependency pinning/signing | **Not yet** |
 | Standard library beyond core types (files, sockets, TLS, crypto) | **Not yet** (helpers include `ct_eq`, `zeroize`, `parse_i64`, stdin and HTML output encoders) |
