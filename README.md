@@ -18,7 +18,7 @@ bin/securec build prog.sec -o prog  # native executable (hardened flags)
 bin/securec check prog.sec          # type/ownership/borrow check only
 bin/securec emit-c prog.sec         # inspect the generated C (deterministic)
 bin/securec audit prog.sec          # JSON: source SHA-256, every unsafe/extern site
-  flags: --forbid-unsafe  --sanitize (ASan/UBSan/LSan)  -O0..-O3  --strict-cc
+  flags: --forbid-unsafe  --web-safe (typed HTML output; disables unsafe)  --sanitize (ASan/UBSan/LSan)  -O0..-O3  --strict-cc
 python3 tests/run_tests.py          # conformance: normal + ASan/UBSan/LSan
 python3 -m unittest discover -s tests -p 'test_*.py'  # compiler/driver properties
 python3 tests/run_analyzer.py       # GCC -fanalyzer on generated C
@@ -67,7 +67,7 @@ impl Account {
 | Data-race freedom (ownership-transfer threads: `spawn`/`join`) | Implemented (no shared mutable state yet) |
 | `unsafe` / `extern` gating + `audit` report + `--forbid-unsafe` | Implemented |
 | Option / Result / `?`, must-use Results | Implemented |
-| HTML text / quoted-attribute output encoding | Distinct types and typed sinks; general output can still bypass them |
+| HTML text / quoted-attribute output encoding | Distinct types and typed sinks; `--web-safe` rejects dynamic strings sent to `print/println` and disables `unsafe` |
 | Generics for user code, traits, closures, modules | **Not yet** |
 | Package manager, dependency pinning/signing | **Not yet** |
 | Standard library beyond core types (files, sockets, TLS, crypto) | **Not yet** (helpers include `ct_eq`, `zeroize`, `parse_i64`, stdin and HTML output encoders) |
