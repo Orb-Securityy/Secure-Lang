@@ -17,9 +17,9 @@ from .ty import *
 
 IDENT_RE = re.compile(r"[A-Za-z_]\w*")
 LVAL_RE = re.compile(r"(?:_t|_r|v_)\w*")
-BUILTIN_TYPES = set(INTS) | {"f64", "bool", "str", "String", "HtmlText", "HtmlAttr", "Vec", "Option", "Result", "Task", "Self"}
+BUILTIN_TYPES = set(INTS) | {"f64", "bool", "str", "String", "HtmlText", "HtmlAttr", "HtmlHrefAttr", "Vec", "Option", "Result", "Task", "Self"}
 BUILTIN_FUNCS = {"print", "println", "exit", "panic", "assert", "read_line", "parse_i64", "str_eq", "ct_eq", "html_escape_text", "html_escape_attr",
-                 "html_write_text", "html_write_attr_value", "zeroize", "spawn", "wrapping_add", "wrapping_sub", "wrapping_mul", "saturating_add",
+                 "html_write_text", "html_write_attr_value", "html_href_attr", "html_write_href_attr", "zeroize", "spawn", "wrapping_add", "wrapping_sub", "wrapping_mul", "saturating_add",
                  "saturating_sub", "saturating_mul", "checked_add", "checked_sub", "checked_mul",
                  "Some", "Ok", "Err", "None"}
 PLACE_KINDS = ("Var", "Field", "Index", "Deref")
@@ -200,6 +200,7 @@ class Compiler:
             if nm == "String": need(0); return STRING
             if nm == "HtmlText": need(0); return HTML_TEXT
             if nm == "HtmlAttr": need(0); return HTML_ATTR
+            if nm == "HtmlHrefAttr": need(0); return HTML_HREF_ATTR
             if nm == "Self":
                 if selfty is None:
                     self.err("`Self` is only valid inside `impl`", n)
@@ -274,7 +275,7 @@ class Compiler:
 
     def needs_drop(self, t):
         k = t.k
-        if k in ("string", "html_text", "html_attr", "vec", "task"): return True
+        if k in ("string", "html_text", "html_attr", "html_href_attr", "vec", "task"): return True
         if k == "struct": return any(self.needs_drop(ft) for _, ft in self.structs[t.name]["fields"])
         if k in ("option", "result", "array"): return any(self.needs_drop(a) for a in t.args)
         return False
@@ -292,6 +293,7 @@ class Compiler:
         if k == "string": return "String"
         if k == "html_text": return "HtmlText"
         if k == "html_attr": return "HtmlAttr"
+        if k == "html_href_attr": return "HtmlHrefAttr"
         if k in ("struct", "enum"): return "T_" + t.name
         if k == "array": return f"Arr_{self.mangle(t.args[0])}_{t.n}"
         if k == "slice": return "Slice_" + self.mangle(t.args[0])
@@ -311,7 +313,7 @@ class Compiler:
         if k == "bool": return "bool"
         if k in ("unit", "never"): return "sec_unit"
         if k == "str": return "Slice_u8"
-        if k in ("string", "html_text", "html_attr"): return "Vec_u8"
+        if k in ("string", "html_text", "html_attr", "html_href_attr"): return "Vec_u8"
         if k == "enum": return "T_" + t.name
         if k == "struct":
             m = self.mangle(t)
@@ -330,7 +332,7 @@ class Compiler:
         return self.mangle(t)
 
     def drop_fn(self, t):
-        if t.k in ("string", "html_text", "html_attr"): return "Vec_u8_drop"
+        if t.k in ("string", "html_text", "html_attr", "html_href_attr"): return "Vec_u8_drop"
         if t.k in ("vec", "task"): return self.mangle(t) + "_drop"
         return "drop_" + self.mangle(t)
 
@@ -2440,6 +2442,16 @@ class Compiler:
             cs = self.lower_args([("value", False, value_ty)], args, n)
             helper = "sec_html_write_attr_value" if nm == "html_write_attr_value" else "sec_html_write_text"
             self.emit(f"{helper}({cs[0]});")
+            return "SEC_UNIT", UNIT
+        if nm == "html_href_attr":
+            cs = self.lower_args([("url", False, ref(STR))], args, n)
+            out_ty = option(HTML_HREF_ATTR)
+            out = self.tmp(self.ctype(out_ty), "{0}")
+            self.emit(f"{out}.some = sec_html_href_attr({cs[0]}, &{out}.v);")
+            return out, out_ty
+        if nm == "html_write_href_attr":
+            cs = self.lower_args([("attribute", False, HTML_HREF_ATTR)], args, n)
+            self.emit(f"sec_html_write_href_attr({cs[0]});")
             return "SEC_UNIT", UNIT
         if nm == "zeroize":
             cs = self.lower_args([("a", False, ref(slice_(U8), True))], args, n)
