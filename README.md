@@ -17,7 +17,7 @@ bin/securec run   prog.sec          # compile + run
 bin/securec build prog.sec -o prog  # native executable (hardened flags)
 bin/securec check prog.sec          # type/ownership/borrow check only
 bin/securec emit-c prog.sec         # inspect the generated C (deterministic)
-bin/securec audit prog.sec          # JSON: source SHA-256, every unsafe/extern site
+bin/securec audit prog.sec          # JSON: source SHA-256, unsafe/extern sites and whether --web-safe was enabled
   flags: --forbid-unsafe  --web-safe (typed HTML output; disables unsafe)  --sanitize (ASan/UBSan/LSan)  -O0..-O3  --strict-cc
 python3 tests/run_tests.py          # conformance: normal + ASan/UBSan/LSan
 python3 -m unittest discover -s tests -p 'test_*.py'  # compiler/driver properties
