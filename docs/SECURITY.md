@@ -66,6 +66,7 @@ and mechanizing the ownership/borrow rules are roadmap items.
   networking/TLS, file I/O policy, dependency integrity / supply-chain tooling (no package manager; only the source
   SHA-256 in `audit`), mutexes/channels/atomics, user generics/traits/closures.
 * `unsafe`/`extern` code is outside every guarantee above.
+* HTML output encoders only perform context-specific byte escaping. The compiler does not require their use at output sinks; they are not HTML sanitizers, URL validators, or encoders for JavaScript/CSS contexts. Quoted-attribute encoding does not make a dangerous URL scheme safe, and neither helper is intended for unquoted attributes. Input UTF-8 validity is not checked.
 * Signed `>>` is implemented with unsigned sign-fill and an in-range two's-complement decoder; it no longer depends on implementation-defined signed right-shift behaviour. Enum values are plain `i32`.
 
 ## 5. Roadmap (priority order)
