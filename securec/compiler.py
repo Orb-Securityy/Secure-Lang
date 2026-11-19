@@ -73,8 +73,10 @@ def c_str(b):
 
 
 class Compiler:
-    def __init__(self, src, filename, forbid_unsafe=False):
-        self.src, self.file, self.forbid_unsafe = src, os.path.basename(filename), forbid_unsafe
+    def __init__(self, src, filename, forbid_unsafe=False, web_safe=False):
+        self.src, self.file = src, os.path.basename(filename)
+        self.web_safe = web_safe
+        self.forbid_unsafe = forbid_unsafe or web_safe
         self.structs, self.enums, self.fns, self.methods, self.consts = {}, {}, {}, {}, {}
         self.enum_cnames = {}
         self.decls, self.protos, self.thunks, self.bodies = [], [], [], []
@@ -2354,6 +2356,17 @@ class Compiler:
     def print_arg(self, a):
         pl = self.place(a) if a.k in PLACE_KINDS else self.rvalue_place(a)
         t, lv = pl.ty, pl.lv
+        if self.web_safe and t.k in ("str", "string"):
+            static_string = a.k == "Str" or (
+                a.k == "Var" and self.lookup(a.name) is None and a.name in self.consts
+                and self.consts[a.name][0].k == "str"
+            )
+            if not static_string:
+                self.err(
+                    "web-safe mode rejects dynamic string output through print/println; "
+                    "use html_escape_text/html_write_text or the matching attribute APIs",
+                    a,
+                )
         if t.k == "int":
             self.emit(f"sec_print_i64((i64){lv});" if is_signed(t.name) else f"sec_print_u64((u64){lv});")
         elif t.k == "float": self.emit(f"sec_print_f64({lv});")
