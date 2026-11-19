@@ -1,0 +1,4 @@
+// EXPECT-ERR: mismatched types: expected `HtmlText`, found `HtmlAttr`
+fn main() {
+    html_write_text(html_escape_attr("value"));
+}
