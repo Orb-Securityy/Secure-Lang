@@ -1,0 +1,5 @@
+// FLAGS: --web-safe
+// EXPECT-ERR: web-safe mode requires html_attribute(...) for allowlisted inert attributes
+fn main() {
+    let value = html_escape_attr("untrusted");
+}
