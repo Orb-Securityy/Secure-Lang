@@ -1,6 +1,14 @@
 // EXPECT-IN: <script>alert("x")</script> & '
 // EXPECT-OUT: <p>&lt;script&gt;alert("x")&lt;/script&gt; &amp; '</p>
 // EXPECT-OUT: <div title="&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;">static</div>
+fn escape_text(value: &str) -> HtmlText {
+    html_escape_text(value)
+}
+
+fn escape_attr(value: &str) -> HtmlAttr {
+    html_escape_attr(value)
+}
+
 fn main() -> i32 {
     match read_line() {
         Some(input) => {
