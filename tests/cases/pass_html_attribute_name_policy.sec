@@ -8,6 +8,7 @@ fn main() -> i32 {
         Some(label) => {
             print("<button ");
             html_write_attribute(label);
+            print(" ");
             match html_attribute("title", "safe & sound") {
                 Some(title) => html_write_attribute(title),
                 None => panic("title was not allowlisted"),
