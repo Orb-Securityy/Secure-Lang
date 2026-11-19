@@ -279,7 +279,7 @@ static inline bool sec_href_prefix_ci(Slice_u8 s, const char *prefix) {
 static inline bool sec_html_href_allowed(Slice_u8 s) {
     for (usize i = 0; i < s.n; i++) {
         u8 c = s.p[i];
-        if (c <= 0x20 || c == 0x7f || c == '\\\\') return false;
+        if (c <= 0x20 || c == 0x7f || c == '\\') return false;
     }
     if (s.n == 0) return true;
     if (s.p[0] == '/') return s.n == 1 || s.p[1] != '/';
@@ -340,9 +340,9 @@ static inline bool sec_html_href_allowed(Slice_u8 s) {
 static inline bool sec_html_href_attr(Slice_u8 input, Vec_u8 *out) {
     if (!sec_html_href_allowed(input)) return false;
     Vec_u8 escaped = sec_html_escape(input, true);
-    Vec_u8 value = Vec_u8_from((Slice_u8){(u8 *)"href=\\\"", 6});
+    Vec_u8 value = Vec_u8_from((Slice_u8){(u8 *)"href=\"", 6});
     Vec_u8_push_str(&value, (Slice_u8){escaped.p, escaped.len});
-    Vec_u8_push(&value, (u8)'\\\"');
+    Vec_u8_push(&value, (u8)'"');
     Vec_u8_drop(&escaped);
     *out = value;
     return true;
@@ -368,6 +368,10 @@ static inline void sec_html_write_text(Vec_u8 value) {
     Vec_u8_drop(&value);
 }
 static inline void sec_html_write_attr_value(Vec_u8 value) {
+    sec_print_str((Slice_u8){value.p, value.len});
+    Vec_u8_drop(&value);
+}
+static inline void sec_html_write_href_attr(Vec_u8 value) {
     sec_print_str((Slice_u8){value.p, value.len});
     Vec_u8_drop(&value);
 }
