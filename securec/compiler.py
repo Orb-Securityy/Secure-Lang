@@ -18,7 +18,7 @@ from .ty import *
 IDENT_RE = re.compile(r"[A-Za-z_]\w*")
 LVAL_RE = re.compile(r"(?:_t|_r|v_)\w*")
 BUILTIN_TYPES = set(INTS) | {"f64", "bool", "str", "String", "Vec", "Option", "Result", "Task", "Self"}
-BUILTIN_FUNCS = {"print", "println", "exit", "panic", "assert", "read_line", "parse_i64", "str_eq", "ct_eq",
+BUILTIN_FUNCS = {"print", "println", "exit", "panic", "assert", "read_line", "parse_i64", "str_eq", "ct_eq", "html_escape_text", "html_escape_attr",
                  "zeroize", "spawn", "wrapping_add", "wrapping_sub", "wrapping_mul", "saturating_add",
                  "saturating_sub", "saturating_mul", "checked_add", "checked_sub", "checked_mul",
                  "Some", "Ok", "Err", "None"}
@@ -2413,6 +2413,10 @@ class Compiler:
             sl = ref(slice_(U8))
             cs = self.lower_args([("a", False, sl), ("b", False, sl)], args, n)
             return self.tmp("bool", f"sec_ct_eq({cs[0]}, {cs[1]})"), BOOL
+        if nm in ("html_escape_text", "html_escape_attr"):
+            cs = self.lower_args([("value", False, ref(STR))], args, n)
+            attribute = "true" if nm == "html_escape_attr" else "false"
+            return self.tmp(self.ctype(STRING), f"sec_html_escape({cs[0]}, {attribute})"), STRING
         if nm == "zeroize":
             cs = self.lower_args([("a", False, ref(slice_(U8), True))], args, n)
             self.emit(f"sec_zeroize({cs[0]});")
